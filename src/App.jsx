@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, Check,
   ChevronDown, ChevronRight, Clock3, Droplets, Facebook, Hammer,
@@ -7,14 +7,14 @@ import {
 } from 'lucide-react'
 
 const services = [
-  { name: 'Plumbing', detail: 'Pipes, taps & leaks', icon: Droplets },
-  { name: 'Electrical', detail: 'Wiring, lights & power', icon: PlugZap },
-  { name: 'Cleaning', detail: 'A fresh start at home', icon: Sparkles },
-  { name: 'AC Repair', detail: 'Cool air, made easy', icon: Wind },
-  { name: 'Carpentry', detail: 'Furniture & fittings', icon: Hammer },
-  { name: 'Painting', detail: 'Give your space new life', icon: Paintbrush },
-  { name: 'Mechanic', detail: 'Mobile auto care', icon: CarFront },
-  { name: 'Beauty & Salon', detail: 'Care that comes to you', icon: Scissors },
+  { name: 'Plumbing', detail: 'Pipes, taps & leaks', category: 'Home', icon: Droplets },
+  { name: 'Electrical', detail: 'Wiring, lights & power', category: 'Home', icon: PlugZap },
+  { name: 'Cleaning', detail: 'A fresh start at home', category: 'Home', icon: Sparkles },
+  { name: 'AC Repair', detail: 'Cool air, made easy', category: 'Home', icon: Wind },
+  { name: 'Carpentry', detail: 'Furniture & fittings', category: 'Home', icon: Hammer },
+  { name: 'Painting', detail: 'Give your space new life', category: 'Home', icon: Paintbrush },
+  { name: 'Mechanic', detail: 'Mobile auto care', category: 'Auto', icon: CarFront },
+  { name: 'Beauty & Salon', detail: 'Care that comes to you', category: 'Personal care', icon: Scissors },
 ]
 
 const testimonials = [
@@ -64,23 +64,64 @@ function PhonePreview() {
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [phone, setPhone] = useState('')
-  const [sent, setSent] = useState(false)
   const [activeFilter, setActiveFilter] = useState('All services')
+  const [dialog, setDialog] = useState(null)
+  const [dialogStatus, setDialogStatus] = useState('')
+  const [sessionRequests, setSessionRequests] = useState([])
+  const [sessionProviderInterest, setSessionProviderInterest] = useState([])
+
+  useEffect(() => {
+    if (!dialog) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setDialog(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [dialog])
 
   const filteredServices = useMemo(() => {
     const normalized = query.trim().toLowerCase()
-    return services.filter((service) => !normalized || `${service.name} ${service.detail}`.toLowerCase().includes(normalized))
-  }, [query])
+    return services.filter((service) => {
+      const matchesCategory = activeFilter === 'All services' || service.category === activeFilter
+      const matchesQuery = !normalized || `${service.name} ${service.detail}`.toLowerCase().includes(normalized)
+      return matchesCategory && matchesQuery
+    })
+  }, [activeFilter, query])
 
   const goTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
     setMenuOpen(false)
   }
 
-  const sendLink = (event) => {
+  const openDialog = (type, service = '') => {
+    setDialogStatus('')
+    setDialog({ type, service })
+    setMenuOpen(false)
+  }
+
+  const submitBooking = (event) => {
     event.preventDefault()
-    if (phone.trim()) setSent(true)
+    const values = new FormData(event.currentTarget)
+    const request = {
+      id: `SC-${Date.now().toString(36).toUpperCase()}`,
+      service: dialog?.service,
+      name: values.get('name'),
+      phone: values.get('phone'),
+      area: values.get('area'),
+      details: values.get('details'),
+    }
+    setSessionRequests((current) => [request, ...current])
+    setDialogStatus(`Request ${request.id} is saved in this browser tab. No professional has been contacted.`)
+    event.currentTarget.reset()
+  }
+
+  const submitProviderInterest = (event) => {
+    event.preventDefault()
+    const values = new FormData(event.currentTarget)
+    const interest = { name: values.get('name'), trade: values.get('trade'), area: values.get('area') }
+    setSessionProviderInterest((current) => [interest, ...current])
+    setDialogStatus('Your provider interest is saved for this browser session only. It has not been sent to ServiceConnect.')
+    event.currentTarget.reset()
   }
 
   return <div className="site-shell" id="home">
@@ -88,19 +129,19 @@ function App() {
       <nav className="nav wrap" aria-label="Main navigation">
         <Logo />
         <div className="nav-links">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}</div>
-        <div className="nav-actions"><a className="button button-outline button-small" href="#get-app">Log in</a><a className="button button-primary button-small" href="#get-app">Get the app <ArrowUpRight size={15} /></a></div>
+        <div className="nav-actions"><button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button></div>
         <button className="menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       </nav>
-      {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}<a href="#get-app" className="button button-primary" onClick={() => setMenuOpen(false)}>Get the app <ArrowRight size={16} /></a></div>}
+      {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}<button className="button button-outline" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary" onClick={() => openDialog('app')}>Get the app <ArrowRight size={16} /></button></div>}
     </header>
 
     <main>
       <section className="hero" id="home-hero"><div className="wrap hero-grid">
         <div className="hero-copy fade-in"><div className="eyebrow"><span className="live-dot" /> LAGOS’ TRUSTED SERVICE MARKETPLACE</div>
           <h1>Trusted help for your home, <em>right around you.</em></h1>
-          <p className="hero-lede">Find verified service experts near you in minutes. Book, track, and pay — all from one simple app.</p>
+          <p className="hero-lede">Explore local service categories and prepare a request. Live provider matching, booking, tracking, and payments are not connected yet.</p>
           <form className="search-box" onSubmit={(e) => { e.preventDefault(); goTo('services') }}><Search size={19} /><input aria-label="Search for a service" placeholder="What service do you need today?" value={query} onChange={(e) => setQuery(e.target.value)} /><span className="search-divider" /><button type="submit" aria-label="Search services"><ArrowRight size={18} /></button></form>
-          <div className="hero-buttons"><a className="button button-primary" href="#get-app">Download the app <ArrowRight size={17} /></a><a className="button button-plain" href="#providers">Become a provider <ArrowUpRight size={16} /></a></div>
+          <div className="hero-buttons"><button className="button button-primary" onClick={() => goTo('services')}>Find a service <ArrowRight size={17} /></button><button className="button button-plain" onClick={() => openDialog('provider')}>Become a provider <ArrowUpRight size={16} /></button></div>
           <div className="hero-proof"><div className="proof-avatars"><i>AO</i><i>TA</i><i>CN</i><i>+</i></div><div><span className="stars">★★★★★</span><p><b>15,000+</b> happy customers in Lagos</p></div></div>
         </div>
         <div className="hero-art"><PhonePreview /></div>
@@ -109,21 +150,30 @@ function App() {
       <section className="trust-strip"><div className="wrap trust-grid">{[['5,000+', 'Verified professionals'], ['15,000+', 'Happy customers'], ['4.8/5', 'Average rating'], ['98%', 'Jobs completed']].map(([num, label]) => <div className="trust-item" key={label}><strong>{num}</strong><span>{label}</span></div>)}</div></section>
 
       <section className="section how-section" id="how-it-works"><div className="wrap"><div className="section-heading centered"><span className="eyebrow blue-eyebrow">HOW IT WORKS</span><h2>Getting it done is <em>easy.</em></h2><p>From your first search to the finishing touch, we’ve got you.</p></div><div className="steps-grid">{[
-        { n: '01', title: 'Tell us what you need', text: 'Pick a service and share a few details about the job.', icon: Search },
-        { n: '02', title: 'Choose your expert', text: 'Compare verified pros by ratings, experience, and price.', icon: BadgeCheck },
-        { n: '03', title: 'Book & relax', text: 'Track your booking, then pay securely when the work is done.', icon: Check },
+        { n: '01', title: 'Choose a service', text: 'Search or filter the categories to find the kind of help you need.', icon: Search },
+        { n: '02', title: 'Prepare a request', text: 'Add your contact and job details in the request form.', icon: BadgeCheck },
+        { n: '03', title: 'Connect the marketplace', text: 'A provider matching and booking backend is required before a pro can be contacted.', icon: Check },
       ].map(({ n, title, text, icon: Icon }) => <article className="step-card" key={n}><div className="step-top"><span className="step-icon"><Icon size={23} /></span><span className="step-num">{n}</span></div><h3>{title}</h3><p>{text}</p></article>)}</div></div></section>
 
-      <section className="section services-section" id="services"><div className="wrap"><div className="section-heading services-heading"><div><span className="eyebrow blue-eyebrow">HELP FOR EVERYDAY LIFE</span><h2>Meet your next <em>go-to pro.</em></h2></div><p>Skilled local experts for all the jobs that make a house feel like home.</p></div><div className="service-toolbar"><div className="filter-pills">{['All services', 'Home', 'Auto', 'Personal care'].map((filter) => <button className={activeFilter === filter ? 'filter-pill selected' : 'filter-pill'} key={filter} onClick={() => { setActiveFilter(filter); if (filter === 'Auto') setQuery('mechanic'); else if (filter === 'Personal care') setQuery('beauty'); else if (filter === 'Home') setQuery(''); else setQuery('') }}>{filter}</button>)}</div><span className="service-count">{filteredServices.length} services <ArrowDown size={14} /></span></div><div className="services-grid">{filteredServices.map(({ name, detail, icon: Icon }) => <a href="#get-app" className="service-card" key={name}><span className="service-icon"><Icon size={24} /></span><span className="service-card-text"><b>{name}</b><small>{detail}</small></span><ChevronRight className="service-arrow" size={18} /></a>)}</div>{filteredServices.length === 0 && <div className="empty-state">No services match “{query}”. Try another search.</div>}<div className="service-footnote"><ShieldCheck size={17} /> Every professional is reviewed and verified before joining.</div></div></section>
+      <section className="section services-section" id="services"><div className="wrap"><div className="section-heading services-heading"><div><span className="eyebrow blue-eyebrow">HELP FOR EVERYDAY LIFE</span><h2>Meet your next <em>go-to pro.</em></h2></div><p>Skilled local experts for all the jobs that make a house feel like home.</p></div><div className="service-toolbar"><div className="filter-pills">{['All services', 'Home', 'Auto', 'Personal care'].map((filter) => <button type="button" className={activeFilter === filter ? 'filter-pill selected' : 'filter-pill'} key={filter} onClick={() => setActiveFilter(filter)}>{filter}</button>)}</div><span className="service-count">{filteredServices.length} {filteredServices.length === 1 ? 'service' : 'services'} <ArrowDown size={14} /></span></div><div className="services-grid">{filteredServices.map(({ name, detail, icon: Icon }) => <button type="button" className="service-card" key={name} onClick={() => openDialog('booking', name)}><span className="service-icon"><Icon size={24} /></span><span className="service-card-text"><b>{name}</b><small>{detail}</small></span><ChevronRight className="service-arrow" size={18} /></button>)}</div>{filteredServices.length === 0 && <div className="empty-state">No services match “{query}”. Try another search.</div>}<div className="service-footnote"><ShieldCheck size={17} /> Service requests are saved in this tab until a booking backend is connected.</div></div></section>
 
-      <section className="section why-section" id="providers"><div className="wrap why-grid"><div className="why-copy"><span className="eyebrow blue-eyebrow">WHY SERVICECONNECT</span><h2>Good people.<br /><em>Great work.</em></h2><p>We bring customers and skilled professionals together with the trust, tools, and support to make every job a good one.</p><a href="#get-app" className="text-link">See how it works <ArrowRight size={16} /></a><div className="why-points">{[['Verified IDs', 'Know who’s coming to your home.'], ['Secure payments', 'Easy payment with no surprises.'], ['Service support', 'We’re here if you need a hand.']].map(([t, d]) => <div className="why-point" key={t}><span><Check size={14} /></span><p><b>{t}</b><small>{d}</small></p></div>)}</div></div><div className="provider-card"><div className="provider-orbit orbit-one"/><div className="provider-orbit orbit-two"/><div className="provider-card-content"><span className="provider-icon"><Wrench size={24} /></span><span className="provider-label">FOR SERVICE PROFESSIONALS</span><h3>More jobs.<br />On your terms.</h3><p>Grow your business, connect with new customers, and take control of your schedule.</p><div className="provider-benefits"><span><Zap size={16} /> Steady job leads</span><span><Clock3 size={16} /> Flexible schedule</span><span><ShieldCheck size={16} /> Fast, secure payouts</span></div><a className="button button-white" href="#get-app">Join as a provider <ArrowRight size={16} /></a></div></div></div></section>
+      <section className="section why-section" id="providers"><div className="wrap why-grid"><div className="why-copy"><span className="eyebrow blue-eyebrow">TRUST BY DESIGN</span><h2>Good people.<br /><em>Great work.</em></h2><p>Identity checks, secure checkout, and service guarantees are planned marketplace features. They require the provider and payment systems to be connected before they can be offered.</p><button type="button" onClick={() => goTo('how-it-works')} className="text-link">See how it works <ArrowRight size={16} /></button><div className="why-points">{[['Identity checks', 'Provider verification needs a live onboarding service.'], ['Secure payments', 'Payment processing has not been configured.'], ['Service support', 'Support contact details still need to be added.']].map(([t, d]) => <div className="why-point" key={t}><span><Check size={14} /></span><p><b>{t}</b><small>{d}</small></p></div>)}</div></div><div className="provider-card"><div className="provider-orbit orbit-one"/><div className="provider-orbit orbit-two"/><div className="provider-card-content"><span className="provider-icon"><Wrench size={24} /></span><span className="provider-label">FOR SERVICE PROFESSIONALS</span><h3>Want to join<br />the network?</h3><p>Register your interest in this preview. Your details stay in this browser tab and are not sent anywhere.</p><div className="provider-benefits"><span><Zap size={16} /> Job leads planned</span><span><Clock3 size={16} /> Flexible schedule</span><span><ShieldCheck size={16} /> Secure payouts planned</span></div><button type="button" className="button button-white" onClick={() => openDialog('provider')}>Register interest <ArrowRight size={16} /></button></div></div></div></section>
 
       <section className="section reviews-section"><div className="wrap"><div className="section-heading centered"><span className="eyebrow blue-eyebrow">KIND WORDS, GOOD WORK</span><h2>Trusted around <em>Lagos.</em></h2><p>See why your neighbours keep coming back.</p></div><div className="reviews-grid">{testimonials.map(({ quote, name, area, initials }) => <article className="review-card" key={name}><div className="review-stars" aria-label="5 out of 5 stars">★★★★★</div><p className="review-quote">“{quote}”</p><div className="review-person"><span className="review-avatar">{initials}</span><span><b>{name}</b><small>{area}</small></span><BadgeCheck size={17} /></div></article>)}</div></div></section>
 
-      <section className="cta-section" id="get-app"><div className="wrap cta-grid"><div className="cta-copy"><span className="eyebrow cta-eyebrow">YOUR NEXT GREAT SERVICE IS ONE TAP AWAY</span><h2>Ready to get it <em>done?</em></h2><p>Get ServiceConnect and find a trusted expert for your next job. We’ll send a download link to your phone.</p><div className="store-buttons"><a href="https://apps.apple.com/" className="store-button"><span className="store-glyph">●</span><span><small>Download on the</small><b>App Store</b></span></a><a href="https://play.google.com/store" className="store-button"><span className="play-glyph">▶</span><span><small>GET IT ON</small><b>Google Play</b></span></a></div></div><form className="sms-card" onSubmit={sendLink}><label htmlFor="phone">Text me the download link</label><div className="sms-control"><span className="country-code">+234</span><input id="phone" type="tel" inputMode="tel" placeholder="Your phone number" value={phone} onChange={(e) => { setPhone(e.target.value); setSent(false) }} required /><button aria-label="Send download link"><ArrowRight size={19} /></button></div><p className="sms-status" role="status">{sent ? 'Thanks! Your download link is on its way.' : 'We’ll only use your number to send this link.'}</p></form></div></section>
+      <section className="cta-section" id="get-app"><div className="wrap cta-grid"><div className="cta-copy"><span className="eyebrow cta-eyebrow">YOUR NEXT GREAT SERVICE IS ONE TAP AWAY</span><h2>Ready to get it <em>done?</em></h2><p>ServiceConnect mobile apps are not published yet. Start by choosing a service on this page.</p><div className="store-buttons"><button type="button" className="store-button store-unavailable" disabled><span className="store-glyph">●</span><span><small>App download</small><b>App Store — coming soon</b></span></button><button type="button" className="store-button store-unavailable" disabled><span className="play-glyph">▶</span><span><small>App download</small><b>Google Play — coming soon</b></span></button></div></div><div className="sms-card cta-note"><span className="cta-note-icon"><ShieldCheck size={21} /></span><h3>Start with a service request</h3><p>Choose one of the service cards above to open a request form. Requests stay in this browser session until a booking service is connected.</p><button type="button" className="button button-white" onClick={() => goTo('services')}>Browse services <ArrowRight size={16} /></button></div></div></section>
     </main>
 
-    <footer className="footer"><div className="wrap"><div className="footer-grid"><div className="footer-brand-col"><Logo footer /><p>Connecting you to trusted service experts. Your home, taken care of.</p><span className="footer-location"><MapPin size={15} /> Lagos, Nigeria</span></div><div><b className="footer-title">Explore</b><a href="#how-it-works">How it works</a><a href="#services">Our services</a><a href="#get-app">Get the app</a></div><div><b className="footer-title">For professionals</b><a href="#providers">Join as a provider</a><a href="#providers">Provider benefits</a><a href="mailto:hello@serviceconnect.ng">Help & support</a></div><div><b className="footer-title">Follow along</b><div className="social-links"><a href="https://instagram.com" aria-label="Instagram"><Instagram size={18} /></a><a href="https://facebook.com" aria-label="Facebook"><Facebook size={18} /></a></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} ServiceConnect. All rights reserved.</span><span><a href="#home">Privacy</a><a href="#home">Terms</a></span><span className="footer-tagline">Connecting You To Trusted Service Experts</span></div></div></footer>
+    <footer className="footer"><div className="wrap"><div className="footer-grid"><div className="footer-brand-col"><Logo footer /><p>Connecting you to trusted service experts. Your home, taken care of.</p><span className="footer-location"><MapPin size={15} /> Lagos, Nigeria</span></div><div><b className="footer-title">Explore</b><a href="#how-it-works">How it works</a><a href="#services">Our services</a><a href="#get-app">Get the app</a></div><div><b className="footer-title">For professionals</b><button className="footer-link-button" onClick={() => openDialog('provider')}>Join as a provider</button><a href="#providers">Provider benefits</a><button className="footer-link-button" onClick={() => openDialog('support')}>Help & support</button></div><div><b className="footer-title">Follow along</b><div className="social-links"><button onClick={() => openDialog('social')} aria-label="Instagram"><Instagram size={18} /></button><button onClick={() => openDialog('social')} aria-label="Facebook"><Facebook size={18} /></button></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} ServiceConnect. All rights reserved.</span><span><button onClick={() => openDialog('privacy')}>Privacy</button><button onClick={() => openDialog('terms')}>Terms</button></span><span className="footer-tagline">Connecting You To Trusted Service Experts</span></div></div></footer>
+
+    {dialog && <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null) }}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" onClick={() => setDialog(null)} aria-label="Close dialog"><X size={19} /></button>
+      {dialog.type === 'booking' && <><span className="dialog-eyebrow">SERVICE REQUEST</span><h2 id="dialog-title">Request {dialog.service}</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Tell us a little about the job. This demo keeps your request in the current tab and does not contact a provider.</p><form className="dialog-form" onSubmit={submitBooking}><label>Your name<input name="name" autoComplete="name" required /></label><label>Phone number<input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+234" required /></label><label>Area in Lagos<input name="area" placeholder="e.g. Yaba, Ikeja, Lekki" required /></label><label>What needs to be done?<textarea name="details" rows="3" placeholder="Add useful details" required /></label><button className="button button-primary" type="submit">Save request <ArrowRight size={16} /></button></form></>}</>}
+      {dialog.type === 'provider' && <><span className="dialog-eyebrow">PROVIDER INTEREST</span><h2 id="dialog-title">Join ServiceConnect</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Share your details to preview the provider onboarding flow. This demo does not send or store your information after the tab closes.</p><form className="dialog-form" onSubmit={submitProviderInterest}><label>Your name<input name="name" autoComplete="name" required /></label><label>Service you provide<select name="trade" defaultValue="" required><option value="" disabled>Select a service</option>{services.map(({name}) => <option key={name}>{name}</option>)}</select></label><label>Service area<input name="area" placeholder="e.g. Surulere, Lagos" required /></label><button className="button button-primary" type="submit">Continue <ArrowRight size={16} /></button></form></>}</>}
+      {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">You have no requests in this browser tab. Choose a service card or provider option to start one.</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
+      {dialog.type === 'app' && <><span className="dialog-eyebrow">APP STATUS</span><h2 id="dialog-title">Mobile app coming soon</h2><p className="dialog-copy">The App Store and Google Play apps are not published yet. You can browse services and preview the request form on this website.</p><button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
+      {['support', 'social'].includes(dialog.type) && <><span className="dialog-eyebrow">SERVICECONNECT</span><h2 id="dialog-title">{dialog.type === 'support' ? 'Support contact coming soon' : 'Social links coming soon'}</h2><p className="dialog-copy">These contact channels have not been configured yet. No message has been sent.</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
+      {['privacy', 'terms'].includes(dialog.type) && <><span className="dialog-eyebrow">{dialog.type === 'privacy' ? 'PRIVACY' : 'TERMS'}</span><h2 id="dialog-title">{dialog.type === 'privacy' ? 'Demo privacy notice' : 'Demo site terms'}</h2><p className="dialog-copy">{dialog.type === 'privacy' ? 'This demo does not send form details to a server. Service request details remain in page memory for this open tab and are cleared when you leave or refresh.' : 'This page is a product demo. Requests created here are not sent to professionals, no bookings or payments are made, and service availability is not guaranteed.'}</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
+    </section></div>}
   </div>
 }
 
