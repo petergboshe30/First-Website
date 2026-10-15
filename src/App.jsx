@@ -6,6 +6,11 @@ import {
   Sparkles, Star, Wind, X, Wrench, CarFront, Scissors, Zap,
 } from 'lucide-react'
 
+
+const countryCodes = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ')
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
+const countries = countryCodes.map((code) => ({ code, name: regionNames.of(code) })).sort((a, b) => a.name.localeCompare(b.name))
+
 const services = [
   { name: 'Plumbing', detail: 'Pipes, taps & leaks', category: 'Home', icon: Droplets },
   { name: 'Electrical', detail: 'Wiring, lights & power', category: 'Home', icon: PlugZap },
@@ -18,8 +23,8 @@ const services = [
 ]
 
 const testimonials = [
-  { quote: 'My plumber arrived on time, explained the fix clearly, and the price was exactly what I was quoted. That kind of peace of mind is priceless.', name: 'Amaka Okafor', area: 'Lekki, Lagos', initials: 'AO' },
-  { quote: 'Booking an electrician took less than five minutes. I could compare ratings first, and the whole process felt safe and simple.', name: 'Tunde Adeyemi', area: 'Ikeja, Lagos', initials: 'TA' },
+  { quote: 'My plumber arrived on time, explained the fix clearly, and the price was exactly what I was quoted. That kind of peace of mind is priceless.', name: 'Amaka Okafor', area: 'Lagos, Nigeria', initials: 'AO' },
+  { quote: 'Booking an electrician took less than five minutes. I could compare ratings first, and the whole process felt safe and simple.', name: 'Tunde Adeyemi', area: 'Lagos, Nigeria', initials: 'TA' },
   { quote: 'As a service provider, I have found great customers and grown my business. I get to choose my schedule and manage jobs from my phone.', name: 'Chika Nwosu', area: 'Service provider', initials: 'CN' },
 ]
 
@@ -36,7 +41,7 @@ function Logo({ footer = false }) {
   </a>
 }
 
-function PhonePreview() {
+function PhonePreview({ countryName, city }) {
   return <div className="phone-scene" aria-label="Preview of the ServiceConnect mobile app">
     <div className="phone-glow" />
     <div className="phone-frame">
@@ -45,7 +50,7 @@ function PhonePreview() {
         <div className="phone-notch" />
         <div className="phone-content">
           <div className="phone-top"><div><small>Good morning, Amaka</small><strong>What do you need?</strong></div><span className="avatar-small">A</span></div>
-          <div className="phone-location"><MapPin size={13} /> Lekki Phase 1, Lagos <ChevronDown size={13} /></div>
+          <div className="phone-location"><MapPin size={13} /> {city || countryName} <ChevronDown size={13} /></div>
           <div className="phone-heading"><strong>Popular services</strong><span>See all</span></div>
           <div className="phone-services">{services.slice(0, 4).map(({ name, icon: Icon }) => <div className="phone-service" key={name}><span><Icon size={17} /></span><small>{name}</small></div>)}</div>
           <div className="phone-promo"><small>Need a hand at home?</small><strong>Find your expert</strong><span>Book a service <ArrowRight size={12} /></span></div>
@@ -57,13 +62,15 @@ function PhonePreview() {
       </div>
     </div>
     <div className="float-note note-top"><span className="note-icon"><BadgeCheck size={18} /></span><span><b>Verified experts</b><small>Ready when you are</small></span></div>
-    <div className="float-note note-bottom"><span className="mini-faces"><i>AO</i><i>TA</i><i>CN</i></span><span><b>4.8 out of 5</b><small>Loved across Lagos</small></span></div>
+    <div className="float-note note-bottom"><span className="mini-faces"><i>AO</i><i>TA</i><i>CN</i></span><span><b>4.8 out of 5</b><small>Service experts nearby</small></span></div>
   </div>
 }
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [countryCode, setCountryCode] = useState('NG')
+  const [city, setCity] = useState('')
   const [activeFilter, setActiveFilter] = useState('All services')
   const [dialog, setDialog] = useState(null)
   const [dialogStatus, setDialogStatus] = useState('')
@@ -78,6 +85,8 @@ function App() {
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [dialog])
+
+  const selectedCountry = countries.find(({ code }) => code === countryCode) || countries[0]
 
   const filteredServices = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -108,6 +117,7 @@ function App() {
       name: values.get('name'),
       phone: values.get('phone'),
       area: values.get('area'),
+      country: values.get('country'),
       details: values.get('details'),
     }
     setSessionRequests((current) => [request, ...current])
@@ -118,7 +128,7 @@ function App() {
   const submitProviderInterest = (event) => {
     event.preventDefault()
     const values = new FormData(event.currentTarget)
-    const interest = { name: values.get('name'), trade: values.get('trade'), area: values.get('area') }
+    const interest = { name: values.get('name'), trade: values.get('trade'), area: values.get('area'), country: values.get('country') }
     setSessionProviderInterest((current) => [interest, ...current])
     setDialogStatus('Your provider interest is saved for this browser session only. It has not been sent to ServiceConnect.')
     event.currentTarget.reset()
@@ -137,14 +147,15 @@ function App() {
 
     <main>
       <section className="hero" id="home-hero"><div className="wrap hero-grid">
-        <div className="hero-copy fade-in"><div className="eyebrow"><span className="live-dot" /> LAGOS’ TRUSTED SERVICE MARKETPLACE</div>
+        <div className="hero-copy fade-in"><div className="eyebrow"><span className="live-dot" /> LOCAL SERVICES, WHEREVER YOU ARE</div>
           <h1>Trusted help for your home, <em>right around you.</em></h1>
-          <p className="hero-lede">Explore local service categories and prepare a request. Live provider matching, booking, tracking, and payments are not connected yet.</p>
+          <p className="hero-lede">Find everyday service experts anywhere in the world. Choose your country and city to personalize a service request. Provider matching and booking launch city by city.</p>
           <form className="search-box" onSubmit={(e) => { e.preventDefault(); goTo('services') }}><Search size={19} /><input aria-label="Search for a service" placeholder="What service do you need today?" value={query} onChange={(e) => setQuery(e.target.value)} /><span className="search-divider" /><button type="submit" aria-label="Search services"><ArrowRight size={18} /></button></form>
+          <div className="location-picker"><label><MapPin size={16} /><span className="sr-only">Country</span><select aria-label="Choose your country" value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>{countries.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</select><ChevronDown size={14} /></label><span className="location-divider"/><input aria-label="City or area" placeholder="City or area (optional)" value={city} onChange={(event) => setCity(event.target.value)} /></div>
           <div className="hero-buttons"><button className="button button-primary" onClick={() => goTo('services')}>Find a service <ArrowRight size={17} /></button><button className="button button-plain" onClick={() => openDialog('provider')}>Become a provider <ArrowUpRight size={16} /></button></div>
-          <div className="hero-proof"><div className="proof-avatars"><i>AO</i><i>TA</i><i>CN</i><i>+</i></div><div><span className="stars">★★★★★</span><p><b>15,000+</b> happy customers in Lagos</p></div></div>
+          <div className="hero-proof"><div className="proof-avatars"><i>AO</i><i>TA</i><i>CN</i><i>+</i></div><div><span className="stars">★★★★★</span><p><b>Discover local pros</b> in your community</p></div></div>
         </div>
-        <div className="hero-art"><PhonePreview /></div>
+        <div className="hero-art"><PhonePreview countryName={selectedCountry.name} city={city} /></div>
       </div></section>
 
       <section className="trust-strip"><div className="wrap trust-grid">{[['5,000+', 'Verified professionals'], ['15,000+', 'Happy customers'], ['4.8/5', 'Average rating'], ['98%', 'Jobs completed']].map(([num, label]) => <div className="trust-item" key={label}><strong>{num}</strong><span>{label}</span></div>)}</div></section>
@@ -159,16 +170,16 @@ function App() {
 
       <section className="section why-section" id="providers"><div className="wrap why-grid"><div className="why-copy"><span className="eyebrow blue-eyebrow">TRUST BY DESIGN</span><h2>Good people.<br /><em>Great work.</em></h2><p>Identity checks, secure checkout, and service guarantees are planned marketplace features. They require the provider and payment systems to be connected before they can be offered.</p><button type="button" onClick={() => goTo('how-it-works')} className="text-link">See how it works <ArrowRight size={16} /></button><div className="why-points">{[['Identity checks', 'Provider verification needs a live onboarding service.'], ['Secure payments', 'Payment processing has not been configured.'], ['Service support', 'Support contact details still need to be added.']].map(([t, d]) => <div className="why-point" key={t}><span><Check size={14} /></span><p><b>{t}</b><small>{d}</small></p></div>)}</div></div><div className="provider-card"><div className="provider-orbit orbit-one"/><div className="provider-orbit orbit-two"/><div className="provider-card-content"><span className="provider-icon"><Wrench size={24} /></span><span className="provider-label">FOR SERVICE PROFESSIONALS</span><h3>Want to join<br />the network?</h3><p>Register your interest in this preview. Your details stay in this browser tab and are not sent anywhere.</p><div className="provider-benefits"><span><Zap size={16} /> Job leads planned</span><span><Clock3 size={16} /> Flexible schedule</span><span><ShieldCheck size={16} /> Secure payouts planned</span></div><button type="button" className="button button-white" onClick={() => openDialog('provider')}>Register interest <ArrowRight size={16} /></button></div></div></div></section>
 
-      <section className="section reviews-section"><div className="wrap"><div className="section-heading centered"><span className="eyebrow blue-eyebrow">KIND WORDS, GOOD WORK</span><h2>Trusted around <em>Lagos.</em></h2><p>See why your neighbours keep coming back.</p></div><div className="reviews-grid">{testimonials.map(({ quote, name, area, initials }) => <article className="review-card" key={name}><div className="review-stars" aria-label="5 out of 5 stars">★★★★★</div><p className="review-quote">“{quote}”</p><div className="review-person"><span className="review-avatar">{initials}</span><span><b>{name}</b><small>{area}</small></span><BadgeCheck size={17} /></div></article>)}</div></div></section>
+      <section className="section reviews-section"><div className="wrap"><div className="section-heading centered"><span className="eyebrow blue-eyebrow">KIND WORDS, GOOD WORK</span><h2>Trusted service, wherever <em>you are.</em></h2><p>See why your neighbours keep coming back.</p></div><div className="reviews-grid">{testimonials.map(({ quote, name, area, initials }) => <article className="review-card" key={name}><div className="review-stars" aria-label="5 out of 5 stars">★★★★★</div><p className="review-quote">“{quote}”</p><div className="review-person"><span className="review-avatar">{initials}</span><span><b>{name}</b><small>{area}</small></span><BadgeCheck size={17} /></div></article>)}</div></div></section>
 
       <section className="cta-section" id="get-app"><div className="wrap cta-grid"><div className="cta-copy"><span className="eyebrow cta-eyebrow">YOUR NEXT GREAT SERVICE IS ONE TAP AWAY</span><h2>Ready to get it <em>done?</em></h2><p>ServiceConnect mobile apps are not published yet. Start by choosing a service on this page.</p><div className="store-buttons"><button type="button" className="store-button store-unavailable" disabled><span className="store-glyph">●</span><span><small>App download</small><b>App Store — coming soon</b></span></button><button type="button" className="store-button store-unavailable" disabled><span className="play-glyph">▶</span><span><small>App download</small><b>Google Play — coming soon</b></span></button></div></div><div className="sms-card cta-note"><span className="cta-note-icon"><ShieldCheck size={21} /></span><h3>Start with a service request</h3><p>Choose one of the service cards above to open a request form. Requests stay in this browser session until a booking service is connected.</p><button type="button" className="button button-white" onClick={() => goTo('services')}>Browse services <ArrowRight size={16} /></button></div></div></section>
     </main>
 
-    <footer className="footer"><div className="wrap"><div className="footer-grid"><div className="footer-brand-col"><Logo footer /><p>Connecting you to trusted service experts. Your home, taken care of.</p><span className="footer-location"><MapPin size={15} /> Lagos, Nigeria</span></div><div><b className="footer-title">Explore</b><a href="#how-it-works">How it works</a><a href="#services">Our services</a><a href="#get-app">Get the app</a></div><div><b className="footer-title">For professionals</b><button className="footer-link-button" onClick={() => openDialog('provider')}>Join as a provider</button><a href="#providers">Provider benefits</a><button className="footer-link-button" onClick={() => openDialog('support')}>Help & support</button></div><div><b className="footer-title">Follow along</b><div className="social-links"><button onClick={() => openDialog('social')} aria-label="Instagram"><Instagram size={18} /></button><button onClick={() => openDialog('social')} aria-label="Facebook"><Facebook size={18} /></button></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} ServiceConnect. All rights reserved.</span><span><button onClick={() => openDialog('privacy')}>Privacy</button><button onClick={() => openDialog('terms')}>Terms</button></span><span className="footer-tagline">Connecting You To Trusted Service Experts</span></div></div></footer>
+    <footer className="footer"><div className="wrap"><div className="footer-grid"><div className="footer-brand-col"><Logo footer /><p>Connecting you to trusted service experts. Your home, taken care of.</p><span className="footer-location"><MapPin size={15} /> {city ? `${city}, ` : ''}{selectedCountry.name}</span></div><div><b className="footer-title">Explore</b><a href="#how-it-works">How it works</a><a href="#services">Our services</a><a href="#get-app">Get the app</a></div><div><b className="footer-title">For professionals</b><button className="footer-link-button" onClick={() => openDialog('provider')}>Join as a provider</button><a href="#providers">Provider benefits</a><button className="footer-link-button" onClick={() => openDialog('support')}>Help & support</button></div><div><b className="footer-title">Follow along</b><div className="social-links"><button onClick={() => openDialog('social')} aria-label="Instagram"><Instagram size={18} /></button><button onClick={() => openDialog('social')} aria-label="Facebook"><Facebook size={18} /></button></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} ServiceConnect. All rights reserved.</span><span><button onClick={() => openDialog('privacy')}>Privacy</button><button onClick={() => openDialog('terms')}>Terms</button></span><span className="footer-tagline">Connecting You To Trusted Service Experts</span></div></div></footer>
 
     {dialog && <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null) }}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" onClick={() => setDialog(null)} aria-label="Close dialog"><X size={19} /></button>
-      {dialog.type === 'booking' && <><span className="dialog-eyebrow">SERVICE REQUEST</span><h2 id="dialog-title">Request {dialog.service}</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Tell us a little about the job. This demo keeps your request in the current tab and does not contact a provider.</p><form className="dialog-form" onSubmit={submitBooking}><label>Your name<input name="name" autoComplete="name" required /></label><label>Phone number<input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+234" required /></label><label>Area in Lagos<input name="area" placeholder="e.g. Yaba, Ikeja, Lekki" required /></label><label>What needs to be done?<textarea name="details" rows="3" placeholder="Add useful details" required /></label><button className="button button-primary" type="submit">Save request <ArrowRight size={16} /></button></form></>}</>}
-      {dialog.type === 'provider' && <><span className="dialog-eyebrow">PROVIDER INTEREST</span><h2 id="dialog-title">Join ServiceConnect</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Share your details to preview the provider onboarding flow. This demo does not send or store your information after the tab closes.</p><form className="dialog-form" onSubmit={submitProviderInterest}><label>Your name<input name="name" autoComplete="name" required /></label><label>Service you provide<select name="trade" defaultValue="" required><option value="" disabled>Select a service</option>{services.map(({name}) => <option key={name}>{name}</option>)}</select></label><label>Service area<input name="area" placeholder="e.g. Surulere, Lagos" required /></label><button className="button button-primary" type="submit">Continue <ArrowRight size={16} /></button></form></>}</>}
+      {dialog.type === 'booking' && <><span className="dialog-eyebrow">SERVICE REQUEST</span><h2 id="dialog-title">Request {dialog.service}</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Tell us a little about the job. This demo keeps your request in the current tab and does not contact a provider.</p><form className="dialog-form" onSubmit={submitBooking}><label>Your name<input name="name" autoComplete="name" required /></label><label>Phone number<input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="Include your country code" required /></label><label>Country<select name="country" defaultValue={countryCode} required>{countries.map(({ code, name }) => <option key={code} value={name}>{name}</option>)}</select></label><label>City or neighbourhood<input name="area" defaultValue={city} placeholder="Enter your city or area" required /></label><label>What needs to be done?<textarea name="details" rows="3" placeholder="Add useful details" required /></label><button className="button button-primary" type="submit">Save request <ArrowRight size={16} /></button></form></>}</>}
+      {dialog.type === 'provider' && <><span className="dialog-eyebrow">PROVIDER INTEREST</span><h2 id="dialog-title">Join ServiceConnect</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Share your details to preview the provider onboarding flow. This demo does not send or store your information after the tab closes.</p><form className="dialog-form" onSubmit={submitProviderInterest}><label>Your name<input name="name" autoComplete="name" required /></label><label>Service you provide<select name="trade" defaultValue="" required><option value="" disabled>Select a service</option>{services.map(({name}) => <option key={name}>{name}</option>)}</select></label><label>Country<select name="country" defaultValue={countryCode} required>{countries.map(({ code, name }) => <option key={code} value={name}>{name}</option>)}</select></label><label>City or service area<input name="area" defaultValue={city} placeholder="Enter your city or area" required /></label><button className="button button-primary" type="submit">Continue <ArrowRight size={16} /></button></form></>}</>}
       {['auth-login', 'auth-signup'].includes(dialog.type) && <><span className="dialog-eyebrow">{dialog.type === 'auth-login' ? 'WELCOME BACK' : 'GET STARTED'}</span><h2 id="dialog-title">{dialog.type === 'auth-login' ? 'Log in to ServiceConnect' : 'Create your account'}</h2>{dialogStatus ? <div className="dialog-success" role="status"><ShieldCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Got it</button></div> : <><p className="dialog-copy">{dialog.type === 'auth-login' ? 'Enter your details to preview the login form.' : 'Create your customer account to preview sign up.'} Authentication is not connected yet, so this form will not create or access an account.</p><form className="dialog-form" onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; if (dialog.type === 'auth-signup' && form.elements.password.value !== form.elements.confirmPassword.value) { form.elements.confirmPassword.setCustomValidity('Passwords do not match.'); form.reportValidity(); return } setDialogStatus('Authentication is not configured yet. No account was created and no login was performed.') }}>
         {dialog.type === 'auth-signup' && <label>Your name<input name="name" autoComplete="name" required /></label>}
         <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>
@@ -176,7 +187,7 @@ function App() {
         {dialog.type === 'auth-signup' && <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength="8" onInput={(event) => event.currentTarget.setCustomValidity('')} required /></label>}
         <button className="button button-primary" type="submit">{dialog.type === 'auth-login' ? 'Log in' : 'Sign up'} <ArrowRight size={16} /></button>
       </form><p className="auth-switch">{dialog.type === 'auth-login' ? 'New to ServiceConnect?' : 'Already have an account?'} <button type="button" onClick={() => openDialog(dialog.type === 'auth-login' ? 'auth-signup' : 'auth-login')}>{dialog.type === 'auth-login' ? 'Sign up' : 'Log in'}</button></p></>}</>}
-      {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">You have no requests in this browser tab. Choose a service card or provider option to start one.</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
+      {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}, {request.country}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}, {interest.country}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">You have no requests in this browser tab. Choose a service card or provider option to start one.</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
       {dialog.type === 'app' && <><span className="dialog-eyebrow">APP STATUS</span><h2 id="dialog-title">Mobile app coming soon</h2><p className="dialog-copy">The App Store and Google Play apps are not published yet. You can browse services and preview the request form on this website.</p><button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
       {['support', 'social'].includes(dialog.type) && <><span className="dialog-eyebrow">SERVICECONNECT</span><h2 id="dialog-title">{dialog.type === 'support' ? 'Support contact coming soon' : 'Social links coming soon'}</h2><p className="dialog-copy">These contact channels have not been configured yet. No message has been sent.</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
       {['privacy', 'terms'].includes(dialog.type) && <><span className="dialog-eyebrow">{dialog.type === 'privacy' ? 'PRIVACY' : 'TERMS'}</span><h2 id="dialog-title">{dialog.type === 'privacy' ? 'Demo privacy notice' : 'Demo site terms'}</h2><p className="dialog-copy">{dialog.type === 'privacy' ? 'This demo does not send form details to a server. Service request details remain in page memory for this open tab and are cleared when you leave or refresh.' : 'This page is a product demo. Requests created here are not sent to professionals, no bookings or payments are made, and service availability is not guaranteed.'}</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
@@ -185,4 +196,3 @@ function App() {
 }
 
 export default App
-
