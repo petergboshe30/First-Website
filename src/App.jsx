@@ -3,7 +3,7 @@ import {
   ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, Check,
   ChevronDown, ChevronRight, Clock3, Droplets, Facebook, Hammer,
   Instagram, MapPin, MapPinned, Menu, MessageCircle, Paintbrush, PlugZap, Search, Send, ShieldCheck,
-  Sparkles, Star, Wind, X, Wrench, CarFront, Scissors, Zap,
+  Sparkles, Star, Wind, X, Wrench, CarFront, Scissors, Zap, Crosshair,
 } from 'lucide-react'
 
 
@@ -72,6 +72,9 @@ function App() {
   const [query, setQuery] = useState('')
   const [countryCode, setCountryCode] = useState('NG')
   const [city, setCity] = useState('')
+  const [deviceLocation, setDeviceLocation] = useState(null)
+  const [locating, setLocating] = useState(false)
+  const [locationMessage, setLocationMessage] = useState('')
   const [activeFilter, setActiveFilter] = useState('All services')
   const [dialog, setDialog] = useState(null)
   const [dialogStatus, setDialogStatus] = useState('')
@@ -109,6 +112,33 @@ function App() {
     setDialog({ type, service })
     setMenuOpen(false)
   }
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationMessage('Your browser does not support location sharing. Choose a city instead.')
+      return
+    }
+    setLocating(true)
+    setLocationMessage('')
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setDeviceLocation({ lat: coords.latitude, lng: coords.longitude })
+        setLocating(false)
+        setLocationMessage('Your map is centered on your current location. Your coordinates are not saved.')
+      },
+      (error) => {
+        setLocating(false)
+        setLocationMessage(error.code === error.PERMISSION_DENIED
+          ? 'Location access was declined. You can still enter a city or area.'
+          : 'We could not read your location. Try entering a city or area instead.')
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    )
+  }
+
+  const mapQuery = deviceLocation
+    ? `${deviceLocation.lat},${deviceLocation.lng}`
+    : `${city ? `${city}, ` : ''}${selectedCountry.name}`
 
   const submitChatMessage = (event) => {
     event.preventDefault()
@@ -163,8 +193,8 @@ function App() {
           <h1>Trusted help for your home, <em>right around you.</em></h1>
           <p className="hero-lede">Find everyday service experts anywhere in the world. Choose your country and city to personalize a service request. Provider matching and booking launch city by city.</p>
           <form className="search-box" onSubmit={(e) => { e.preventDefault(); goTo('services') }}><Search size={19} /><input aria-label="Search for a service" placeholder="What service do you need today?" value={query} onChange={(e) => setQuery(e.target.value)} /><span className="search-divider" /><button type="submit" aria-label="Search services"><ArrowRight size={18} /></button></form>
-          <div className="location-picker"><label><MapPin size={16} /><span className="sr-only">Country</span><select aria-label="Choose your country" value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>{countries.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</select><ChevronDown size={14} /></label><span className="location-divider"/><input aria-label="City or area" placeholder="City or area (optional)" value={city} onChange={(event) => setCity(event.target.value)} /></div>
-          <p className="location-note">Explore the site from anywhere. Service availability depends on local launch.</p>
+          <div className="location-picker"><label><MapPin size={16} /><span className="sr-only">Country</span><select aria-label="Choose your country" value={countryCode} onChange={(event) => { setCountryCode(event.target.value); setDeviceLocation(null); setLocationMessage('') }}>{countries.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</select><ChevronDown size={14} /></label><span className="location-divider"/><input aria-label="City or area" placeholder="City or area (optional)" value={city} onChange={(event) => { setCity(event.target.value); setDeviceLocation(null); setLocationMessage('') }} /><button type="button" className="use-location" onClick={useMyLocation} disabled={locating}><Crosshair size={15} />{locating ? 'Locating…' : 'Use my location'}</button></div>
+          <p className="location-note" role="status">{locationMessage || 'Explore the site from anywhere. Service availability depends on local launch.'}</p>
           <div className="hero-buttons"><button className="button button-primary" onClick={() => goTo('services')}>Find a service <ArrowRight size={17} /></button><button className="button button-plain" onClick={() => openDialog('provider')}>Become a provider <ArrowUpRight size={16} /></button></div>
           <div className="hero-proof"><div className="proof-avatars"><i>AO</i><i>TA</i><i>CN</i><i>+</i></div><div><span className="stars">★★★★★</span><p><b>Discover local pros</b> in your community</p></div></div>
         </div>
@@ -183,7 +213,7 @@ function App() {
 
       <section className="section why-section" id="providers"><div className="wrap why-grid"><div className="why-copy"><span className="eyebrow blue-eyebrow">TRUST BY DESIGN</span><h2>Good people.<br /><em>Great work.</em></h2><p>Identity checks, secure checkout, and service guarantees are planned marketplace features. They require the provider and payment systems to be connected before they can be offered.</p><button type="button" onClick={() => goTo('how-it-works')} className="text-link">See how it works <ArrowRight size={16} /></button><div className="why-points">{[['Identity checks', 'Provider verification needs a live onboarding service.'], ['Secure payments', 'Payment processing has not been configured.'], ['Service support', 'Support contact details still need to be added.']].map(([t, d]) => <div className="why-point" key={t}><span><Check size={14} /></span><p><b>{t}</b><small>{d}</small></p></div>)}</div></div><div className="provider-card"><div className="provider-orbit orbit-one"/><div className="provider-orbit orbit-two"/><div className="provider-card-content"><span className="provider-icon"><Wrench size={24} /></span><span className="provider-label">FOR SERVICE PROFESSIONALS</span><h3>Want to join<br />the network?</h3><p>Register your interest in this preview. Your details stay in this browser tab and are not sent anywhere.</p><div className="provider-benefits"><span><Zap size={16} /> Job leads planned</span><span><Clock3 size={16} /> Flexible schedule</span><span><ShieldCheck size={16} /> Secure payouts planned</span></div><button type="button" className="button button-white" onClick={() => openDialog('provider')}>Register interest <ArrowRight size={16} /></button></div></div></div></section>
 
-      <section className="section map-section" id="map"><div className="wrap map-grid"><div className="map-copy"><span className="eyebrow blue-eyebrow">LOCAL DISCOVERY</span><h2>Find services near <em>you.</em></h2><p>Explore the location you selected above. When ServiceConnect launches in your area, local pros can join the network.</p><div className="map-location"><span><MapPinned size={19} /></span><div><small>Selected location</small><strong>{city ? `${city}, ` : ''}{selectedCountry.name}</strong></div></div><a className="button button-primary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${city ? `${city}, ` : ''}${selectedCountry.name}`)}`} target="_blank" rel="noreferrer">Open in Maps <ArrowUpRight size={16} /></a></div><div className="map-frame"><iframe title={`Map of ${city ? `${city}, ` : ''}${selectedCountry.name}`} src={`https://maps.google.com/maps?q=${encodeURIComponent(`${city ? `${city}, ` : ''}${selectedCountry.name}`)}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /><span className="map-caption"><MapPin size={15} /> {city ? `${city}, ` : ''}{selectedCountry.name}</span></div></div></section>
+      <section className="section map-section" id="map"><div className="wrap map-grid"><div className="map-copy"><span className="eyebrow blue-eyebrow">LOCAL DISCOVERY</span><h2>Find services near <em>you.</em></h2><p>Explore the location you selected above. When ServiceConnect launches in your area, local pros can join the network.</p><div className="map-location"><span><MapPinned size={19} /></span><div><small>{deviceLocation ? 'Current device location' : 'Selected location'}</small><strong>{deviceLocation ? 'Near your location' : `${city ? `${city}, ` : ''}${selectedCountry.name}`}</strong></div></div><a className="button button-primary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`} target="_blank" rel="noreferrer">Open in Maps <ArrowUpRight size={16} /></a></div><div className="map-frame"><iframe title={`Map of ${deviceLocation ? 'your current location' : mapQuery}`} src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /><span className="map-caption"><MapPin size={15} /> {deviceLocation ? 'Your current location' : `${city ? `${city}, ` : ''}${selectedCountry.name}`}</span></div></div></section>
 
       <section className="section reviews-section"><div className="wrap"><div className="section-heading centered"><span className="eyebrow blue-eyebrow">KIND WORDS, GOOD WORK</span><h2>Trusted service, wherever <em>you are.</em></h2><p>See why your neighbours keep coming back.</p></div><div className="reviews-grid">{testimonials.map(({ quote, name, area, initials }) => <article className="review-card" key={name}><div className="review-stars" aria-label="5 out of 5 stars">★★★★★</div><p className="review-quote">“{quote}”</p><div className="review-person"><span className="review-avatar">{initials}</span><span><b>{name}</b><small>{area}</small></span><BadgeCheck size={17} /></div></article>)}</div></div></section>
 
@@ -214,3 +244,4 @@ function App() {
 }
 
 export default App
+
