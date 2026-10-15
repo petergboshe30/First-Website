@@ -101,4 +101,4 @@
 .notification-empty{padding:18px 0;text-align:center;color:#64748b;font-size:11px}
 .notification-note{margin:10px 2px 0}
 .messenger-status-dot{display:inline-block;width:8px;height:8px;margin:0 4px 1px 0;border-radius:50%;background:#2563eb}
-@media(max-width:680px){.notification-wrap{display:none}.notification-panel{position:fixed;top:76px;right:14px;width:min(360px,calc(100vw - 28px))}}
+@media(min-width:681px){.mobile-notification-button{display:none}}@media(max-width:680px){.mobile-notification-button{position:relative;width:40px;height:40px;margin-left:auto;display:grid;place-items:center;border:1px solid #bfdbfe;border-radius:12px;background:#fff;color:var(--blue)}.mobile-notification-panel{position:fixed;top:76px;right:14px;width:min(360px,calc(100vw - 28px))}}
