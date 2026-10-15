@@ -5,6 +5,7 @@ import {
   Instagram, MapPin, MapPinned, Menu, MessageCircle, Paintbrush, PlugZap, Search, Send, ShieldCheck,
   Sparkles, Star, Wind, X, Wrench, CarFront, Scissors, Zap, Crosshair,
   Hospital, Pill, CircleGauge, Compass, GraduationCap, UserRound,
+  ChefHat, Baby, Truck, Laptop, Music2,
 } from 'lucide-react'
 
 
@@ -16,17 +17,25 @@ const services = [
   { name: 'Plumbing', detail: 'Pipes, taps & leaks', category: 'Home', icon: Droplets },
   { name: 'Electrical', detail: 'Wiring, lights & power', category: 'Home', icon: PlugZap },
   { name: 'Cleaning', detail: 'A fresh start at home', category: 'Home', icon: Sparkles },
+  { name: 'Maid', detail: 'Reliable household help', category: 'Home', icon: Sparkles },
+  { name: 'Cook', detail: 'Home cooking and meal prep', category: 'Home', icon: ChefHat },
   { name: 'AC Repair', detail: 'Cool air, made easy', category: 'Home', icon: Wind },
-  { name: 'Carpentry', detail: 'Furniture & fittings', category: 'Home', icon: Hammer },
+  { name: 'Carpenter & Carpentry', detail: 'Furniture, fittings & repairs', category: 'Home', icon: Hammer },
   { name: 'Painter & Painting', detail: 'Give your space new life', category: 'Home', icon: Paintbrush },
   { name: 'Mechanic', detail: 'Mobile auto care', category: 'Auto', icon: CarFront },
   { name: 'Tyre Puncture Help', detail: 'Roadside tyre repair', category: 'Auto', icon: CircleGauge },
+  { name: 'Car Wash', detail: 'Mobile and local car cleaning', category: 'Auto', icon: CarFront },
   { name: 'Beauty & Salon', detail: 'Care that comes to you', category: 'Personal care', icon: Scissors },
   { name: 'Barber', detail: 'Cuts and grooming near you', category: 'Personal care', icon: UserRound },
+  { name: 'Tailor', detail: 'Alterations and custom clothing', category: 'Personal care', icon: Scissors },
+  { name: 'Babysitter', detail: 'Childcare support for your family', category: 'Personal care', icon: Baby },
   { name: 'Clinics & Medical Care', detail: 'Find nearby clinics', category: 'Health', icon: Hospital, directory: true },
   { name: 'Chemist & Pharmacy', detail: 'Find nearby pharmacies', category: 'Health', icon: Pill, directory: true },
   { name: 'Tourist Guide', detail: 'Local guides and experiences', category: 'Education & travel', icon: Compass },
   { name: 'Tutoring', detail: 'One-to-one learning support', category: 'Education & travel', icon: GraduationCap },
+  { name: 'Packers & Movers', detail: 'Home and office moving help', category: 'Home', icon: Truck },
+  { name: 'Computer Repair', detail: 'Computer setup and repairs', category: 'Tech & events', icon: Laptop },
+  { name: 'DJ & Sound System', detail: 'Music and event sound setup', category: 'Tech & events', icon: Music2 },
 ]
 
 const testimonials = [
@@ -224,7 +233,7 @@ function App() {
         { n: '03', title: 'Connect the marketplace', text: 'A provider matching and booking backend is required before a pro can be contacted.', icon: Check },
       ].map(({ n, title, text, icon: Icon }) => <article className="step-card" key={n}><div className="step-top"><span className="step-icon"><Icon size={23} /></span><span className="step-num">{n}</span></div><h3>{title}</h3><p>{text}</p></article>)}</div></div></section>
 
-      <section className="section services-section" id="services"><div className="wrap"><div className="section-heading services-heading"><div><span className="eyebrow blue-eyebrow">HELP FOR EVERYDAY LIFE</span><h2>Meet your next <em>go-to pro.</em></h2></div><p>Find help for your home, vehicle, personal care, learning, travel, and local health directories.</p></div><div className="service-toolbar"><div className="filter-pills">{['All services', 'Home', 'Auto', 'Personal care', 'Health', 'Education & travel'].map((filter) => <button type="button" className={activeFilter === filter ? 'filter-pill selected' : 'filter-pill'} key={filter} onClick={() => setActiveFilter(filter)}>{filter}</button>)}</div><span className="service-count">{filteredServices.length} {filteredServices.length === 1 ? 'service' : 'services'} <ArrowDown size={14} /></span></div><div className="services-grid">{filteredServices.map(({ name, detail, icon: Icon, directory }) => <button type="button" className="service-card" key={name} onClick={() => directory ? window.open(serviceMapUrl(name), '_blank', 'noopener,noreferrer') : openDialog('booking', name)}><span className="service-icon"><Icon size={24} /></span><span className="service-card-text"><b>{name}</b><small>{directory ? 'Search nearby places in Maps' : detail}</small></span><ChevronRight className="service-arrow" size={18} /></button>)}</div>{filteredServices.length === 0 && <div className="empty-state">No services match “{query}”. Try another search.</div>}<div className="service-footnote"><ShieldCheck size={17} /> Requests stay in this browser session; nearby clinic and pharmacy searches open Google Maps.</div></div></section>
+      <section className="section services-section" id="services"><div className="wrap"><div className="section-heading services-heading"><div><span className="eyebrow blue-eyebrow">HELP FOR EVERYDAY LIFE</span><h2>Meet your next <em>go-to pro.</em></h2></div><p>Find help for your home, vehicle, personal care, learning, travel, and local health directories.</p></div><div className="service-toolbar"><div className="filter-pills">{['All services', 'Home', 'Auto', 'Personal care', 'Health', 'Education & travel', 'Tech & events'].map((filter) => <button type="button" className={activeFilter === filter ? 'filter-pill selected' : 'filter-pill'} key={filter} onClick={() => setActiveFilter(filter)}>{filter}</button>)}</div><span className="service-count">{filteredServices.length} {filteredServices.length === 1 ? 'service' : 'services'} <ArrowDown size={14} /></span></div><div className="services-grid">{filteredServices.map(({ name, detail, icon: Icon, directory }) => <button type="button" className="service-card" key={name} onClick={() => directory ? window.open(serviceMapUrl(name), '_blank', 'noopener,noreferrer') : openDialog('booking', name)}><span className="service-icon"><Icon size={24} /></span><span className="service-card-text"><b>{name}</b><small>{directory ? 'Search nearby places in Maps' : detail}</small></span><ChevronRight className="service-arrow" size={18} /></button>)}</div>{filteredServices.length === 0 && <div className="empty-state">No services match “{query}”. Try another search.</div>}<div className="service-footnote"><ShieldCheck size={17} /> Requests stay in this browser session; nearby clinic and pharmacy searches open Google Maps.</div></div></section>
 
       <section className="section why-section" id="providers"><div className="wrap why-grid"><div className="why-copy"><span className="eyebrow blue-eyebrow">TRUST BY DESIGN</span><h2>Good people.<br /><em>Great work.</em></h2><p>Identity checks, secure checkout, and service guarantees are planned marketplace features. They require the provider and payment systems to be connected before they can be offered.</p><button type="button" onClick={() => goTo('how-it-works')} className="text-link">See how it works <ArrowRight size={16} /></button><div className="why-points">{[['Identity checks', 'Provider verification needs a live onboarding service.'], ['Secure payments', 'Payment processing has not been configured.'], ['Service support', 'Support contact details still need to be added.']].map(([t, d]) => <div className="why-point" key={t}><span><Check size={14} /></span><p><b>{t}</b><small>{d}</small></p></div>)}</div></div><div className="provider-card"><div className="provider-orbit orbit-one"/><div className="provider-orbit orbit-two"/><div className="provider-card-content"><span className="provider-icon"><Wrench size={24} /></span><span className="provider-label">FOR SERVICE PROFESSIONALS</span><h3>Want to join<br />the network?</h3><p>Register your interest in this preview. Your details stay in this browser tab and are not sent anywhere.</p><div className="provider-benefits"><span><Zap size={16} /> Job leads planned</span><span><Clock3 size={16} /> Flexible schedule</span><span><ShieldCheck size={16} /> Secure payouts planned</span></div><button type="button" className="button button-white" onClick={() => openDialog('provider')}>Register interest <ArrowRight size={16} /></button></div></div></div></section>
 
