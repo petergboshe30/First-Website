@@ -4,7 +4,7 @@ import {
   ChevronDown, ChevronRight, Clock3, Droplets, Facebook, Hammer,
   Instagram, MapPin, MapPinned, Menu, MessageCircle, Paintbrush, PlugZap, Search, Send, ShieldCheck,
   Sparkles, Star, Wind, X, Wrench, CarFront, Scissors, Zap, Crosshair,
-  Hospital, Pill, CircleGauge, Compass, GraduationCap, UserRound,
+  Hospital, Pill, CircleGauge, Compass, GraduationCap, UserRound, Bell,
   ChefHat, Baby, Truck, Laptop, Music2, CalendarDays, Camera, Video, PackageCheck,
 } from 'lucide-react'
 
@@ -100,7 +100,9 @@ function App() {
   const [dialogStatus, setDialogStatus] = useState('')
   const [sessionRequests, setSessionRequests] = useState([])
   const [sessionProviderInterest, setSessionProviderInterest] = useState([])
-  const [chatMessages, setChatMessages] = useState([{ id: 'welcome', sender: 'assistant', text: 'Hi! I’m the ServiceConnect chat preview. Ask how to find a service or set your location.' }])
+  const [chatMessages, setChatMessages] = useState([{ id: 'welcome', sender: 'assistant', text: 'Hi! I’m the ServiceConnect messenger preview. Ask how to find a service or set your location.' }])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState([{ id: 'welcome', title: 'Welcome to ServiceConnect', message: 'Your on-site updates will appear here.', time: 'Just now', read: false }])
 
   useEffect(() => {
     if (!dialog) return undefined
@@ -168,6 +170,10 @@ function App() {
     ? `${deviceLocation.lat},${deviceLocation.lng}`
     : `${city ? `${city}, ` : ''}${selectedCountry.name}`
 
+  const createNotification = (title, message) => {
+    setNotifications((current) => [{ id: `notice-${Date.now()}`, title, message, time: 'Just now', read: false }, ...current].slice(0, 8))
+  }
+
   const submitChatMessage = (event) => {
     event.preventDefault()
     const form = event.currentTarget
@@ -175,6 +181,7 @@ function App() {
     if (!message) return
     const reply = 'Thanks for reaching out. This preview cannot connect you to a live agent or provider yet. Choose your country and city above to prepare a local service request.'
     setChatMessages((current) => [...current, { id: `you-${Date.now()}`, sender: 'user', text: message }, { id: `reply-${Date.now()}`, sender: 'assistant', text: reply }])
+    createNotification('Messenger reply', 'ServiceConnect sent a demo reply in your conversation.')
     form.reset()
   }
 
@@ -191,6 +198,7 @@ function App() {
       details: values.get('details'),
     }
     setSessionRequests((current) => [request, ...current])
+    createNotification('Service request saved', `${request.service} request ${request.id} is saved in this browser tab.`)
     setDialogStatus(`Request ${request.id} is saved in this browser tab. No professional has been contacted.`)
     event.currentTarget.reset()
   }
@@ -209,7 +217,7 @@ function App() {
       <nav className="nav wrap" aria-label="Main navigation">
         <Logo />
         <div className="nav-links">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}</div>
-        <div className="nav-actions"><button className="button button-outline button-small" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary button-small" onClick={() => openDialog('auth-signup')}>Sign up</button><button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button></div>
+        <div className="nav-actions"><button className="button button-outline button-small" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary button-small" onClick={() => openDialog('auth-signup')}>Sign up</button><button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button><div className="notification-wrap"><button className="notification-button" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}</div></div>
         <button className="menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       </nav>
       {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}<button className="button button-outline" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary" onClick={() => openDialog('auth-signup')}>Sign up</button><button className="button button-outline" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary" onClick={() => openDialog('app')}>Get the app <ArrowRight size={16} /></button></div>}
@@ -248,7 +256,7 @@ function App() {
       <section className="cta-section" id="get-app"><div className="wrap cta-grid"><div className="cta-copy"><span className="eyebrow cta-eyebrow">YOUR NEXT GREAT SERVICE IS ONE TAP AWAY</span><h2>Ready to get it <em>done?</em></h2><p>ServiceConnect mobile apps are not published yet. Start by choosing a service on this page.</p><div className="store-buttons"><button type="button" className="store-button store-unavailable" disabled><span className="store-glyph">●</span><span><small>App download</small><b>App Store — coming soon</b></span></button><button type="button" className="store-button store-unavailable" disabled><span className="play-glyph">▶</span><span><small>App download</small><b>Google Play — coming soon</b></span></button></div></div><div className="sms-card cta-note"><span className="cta-note-icon"><ShieldCheck size={21} /></span><h3>Start with a service request</h3><p>Choose one of the service cards above to open a request form. Requests stay in this browser session until a booking service is connected.</p><button type="button" className="button button-white" onClick={() => goTo('services')}>Browse services <ArrowRight size={16} /></button></div></div></section>
     </main>
 
-    <button className="chat-launcher" type="button" onClick={() => openDialog('chat')} aria-label="Open ServiceConnect chat"><MessageCircle size={20} /><span>Chat with us</span></button>
+    <button className="chat-launcher" type="button" onClick={() => openDialog('chat')} aria-label="Open ServiceConnect messenger"><MessageCircle size={20} /><span>Messenger</span></button>
 
     <footer className="footer"><div className="wrap"><div className="footer-grid"><div className="footer-brand-col"><Logo footer /><p>Connecting you to trusted service experts. Your home, taken care of.</p><span className="footer-location"><MapPin size={15} /> {city ? `${city}, ` : ''}{selectedCountry.name}</span></div><div><b className="footer-title">Explore</b><a href="#how-it-works">How it works</a><a href="#services">Our services</a><a href="#map">Find us</a><a href="#get-app">Get the app</a></div><div><b className="footer-title">For professionals</b><button className="footer-link-button" onClick={() => openDialog('provider')}>Join as a provider</button><a href="#providers">Provider benefits</a><button className="footer-link-button" onClick={() => openDialog('support')}>Help & support</button></div><div><b className="footer-title">Follow along</b><div className="social-links"><button onClick={() => openDialog('social')} aria-label="Instagram"><Instagram size={18} /></button><button onClick={() => openDialog('social')} aria-label="Facebook"><Facebook size={18} /></button></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} ServiceConnect. All rights reserved.</span><span><button onClick={() => openDialog('privacy')}>Privacy</button><button onClick={() => openDialog('terms')}>Terms</button></span><span className="footer-tagline">Connecting You To Trusted Service Experts</span></div></div></footer>
 
@@ -263,7 +271,7 @@ function App() {
         <button className="button button-primary" type="submit">{dialog.type === 'auth-login' ? 'Log in' : 'Sign up'} <ArrowRight size={16} /></button>
       </form><p className="auth-switch">{dialog.type === 'auth-login' ? 'New to ServiceConnect?' : 'Already have an account?'} <button type="button" onClick={() => openDialog(dialog.type === 'auth-login' ? 'auth-signup' : 'auth-login')}>{dialog.type === 'auth-login' ? 'Sign up' : 'Log in'}</button></p></>}</>}
       {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}, {request.country}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}, {interest.country}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">You have no requests in this browser tab. Choose a service card or provider option to start one.</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
-      {dialog.type === 'chat' && <><span className="dialog-eyebrow">SERVICECONNECT CHAT</span><h2 id="dialog-title">How can we help?</h2><p className="dialog-copy">Chat preview: messages stay in this browser session and are not sent to a live agent.</p><div className="chat-transcript" aria-live="polite">{chatMessages.map(({ id, sender, text }) => <div className={`chat-message ${sender === 'user' ? 'chat-message-user' : ''}`} key={id}><small>{sender === 'user' ? 'You' : 'ServiceConnect'}</small><p>{text}</p></div>)}</div><form className="chat-form" onSubmit={submitChatMessage}><label className="sr-only" htmlFor="chat-message-input">Your message</label><input id="chat-message-input" name="message" autoComplete="off" placeholder="Write a message…" maxLength="500" required /><button className="button button-primary" type="submit" aria-label="Send message"><Send size={17} /></button></form></>}
+      {dialog.type === 'chat' && <><span className="dialog-eyebrow">SERVICECONNECT MESSENGER</span><h2 id="dialog-title">How can we help?</h2><p className="dialog-copy"><span className="messenger-status-dot" /> Messenger preview · replies are automated and stay in this browser session; a live agent is not connected yet.</p><div className="chat-transcript" aria-live="polite">{chatMessages.map(({ id, sender, text }) => <div className={`chat-message ${sender === 'user' ? 'chat-message-user' : ''}`} key={id}><small>{sender === 'user' ? 'You' : 'ServiceConnect'}</small><p>{text}</p></div>)}</div><form className="chat-form" onSubmit={submitChatMessage}><label className="sr-only" htmlFor="chat-message-input">Your message</label><input id="chat-message-input" name="message" autoComplete="off" placeholder="Write a message…" maxLength="500" required /><button className="button button-primary" type="submit" aria-label="Send message"><Send size={17} /></button></form></>}
       {dialog.type === 'app' && <><span className="dialog-eyebrow">APP STATUS</span><h2 id="dialog-title">Mobile app coming soon</h2><p className="dialog-copy">The App Store and Google Play apps are not published yet. You can browse services and preview the request form on this website.</p><button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
       {['support', 'social'].includes(dialog.type) && <><span className="dialog-eyebrow">SERVICECONNECT</span><h2 id="dialog-title">{dialog.type === 'support' ? 'Support contact coming soon' : 'Social links coming soon'}</h2><p className="dialog-copy">These contact channels have not been configured yet. No message has been sent.</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
       {['privacy', 'terms'].includes(dialog.type) && <><span className="dialog-eyebrow">{dialog.type === 'privacy' ? 'PRIVACY' : 'TERMS'}</span><h2 id="dialog-title">{dialog.type === 'privacy' ? 'Demo privacy notice' : 'Demo site terms'}</h2><p className="dialog-copy">{dialog.type === 'privacy' ? 'This demo does not send form details to a server. Service request details remain in page memory for this open tab and are cleared when you leave or refresh.' : 'This page is a product demo. Requests created here are not sent to professionals, no bookings or payments are made, and service availability is not guaranteed.'}</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
