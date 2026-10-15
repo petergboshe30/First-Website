@@ -10,7 +10,7 @@
 
 /* Functional, accessible interaction states */
 .service-card{cursor:pointer;text-align:left;font-family:inherit;color:var(--ink)}
-.footer-link-button,.footer-bottom button{padding:0;border:0;background:none;color:#64748b;font:inherit;font-size:10px;text-align:left;cursor:pointer;transition:color .2s}
+.nav-actions{gap:8px}.nav-actions .button-small{padding-inline:13px}.auth-switch{margin:15px 0 0;color:#64748b;font-size:11px}.auth-switch button{padding:0;border:0;background:none;color:var(--blue);font:inherit;font-weight:700;cursor:pointer}.footer-link-button,.footer-bottom button{padding:0;border:0;background:none;color:#64748b;font:inherit;font-size:10px;text-align:left;cursor:pointer;transition:color .2s}
 .footer-link-button:hover,.footer-bottom button:hover{color:var(--blue)}
 .footer-bottom>span:nth-child(2){display:flex;gap:18px}
 .store-unavailable{cursor:not-allowed;opacity:.72}
