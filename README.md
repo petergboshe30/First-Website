@@ -45,5 +45,13 @@ The deploy workflow can also be started from the repository’s **Actions** tab 
 └── vite.config.js
 ```
 
-The service search filters the category cards as you type. The category chips provide quick filters. The phone number form displays a confirmation state; connect it to an SMS provider to send real download links. App Store and Google Play links are starter destinations to replace with the published app links.
+## Current interaction scope
+
+- Search filters services as you type. Category filters work independently and can be combined with search.
+- Selecting a service opens a validated request form. Requests are held in React memory for the current page session and can be viewed with **My requests**. They are not sent to a provider or saved to a server.
+- Provider interest forms use the same session-only behavior. No real provider onboarding or job matching is connected.
+- The app-store buttons stay disabled until real store listings are available. The login, SMS delivery, payments, and support/social channels are not connected, so the page does not pretend that those actions completed.
+- Privacy and terms links explain the limits of this demo. Replace them with reviewed production policies before launch.
+
+To make the marketplace fully operational, connect a backend for accounts, provider verification, service requests and matching, job status, notifications/SMS, and payments. Add real iOS/Android store URLs and actual support/social contacts. Keep API secrets in GitHub Actions secrets or a backend; this repository is public.
 
