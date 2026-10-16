@@ -201,6 +201,8 @@ const server = createServer(async (req, res) => {
     }
     if (route === '/api/profile/documents' && req.method === 'POST') {
       if (!user) return json(res, 401, { error: 'Log in to upload a private document.' })
+      const currentDocuments = (store.profileDocuments || []).filter((item) => item.userId === user.id)
+      if (currentDocuments.length >= 10) return json(res, 409, { error: 'A demo profile can keep up to 10 documents.' })
       const input = await body(req)
       const { bytes, type } = uploadBuffer(input, ['application/pdf', 'image/jpeg', 'image/png'], 5 * 1024 * 1024)
       const id = randomBytes(18).toString('hex')
