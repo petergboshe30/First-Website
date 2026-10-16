@@ -207,14 +207,75 @@ const server = createServer(async (req, res) => {
       await storePrivateFile(id, bytes)
       store.profileDocuments ||= []
       store.profileDocuments.unshift({
-        id, userId: user.id, name: clean(input.name, 120).replace(/[\\/\\x00-\\x1f]/g, '') || 'Document',
+        id, userId: user.id, name: clean(input.name, 120).split('/').pop().split(String.fromCharCode(92)).pop().split('').filter((char) => char.charCodeAt(0) >= 32).join('') || 'Document',
         type, size: bytes.length, createdAt: new Date().toISOString(),
       })
       await saveStore(store)
       const { userId: _userId, ...document } = store.profileDocuments[0]
       return json(res, 201, { document })
     }
-    const documentMatch = route.match(/^\\/api\\/profile\\/documents\\/([a-f0-9]{36})$/)
+    const documentMatch = route.match(new RegExp('^/api/profile/documents/([a-f0-9]{36})
+    if (documentMatch && req.method === 'GET') {
+      if (!user) return json(res, 401, { error: 'Log in to download private documents.' })
+      const record = (store.profileDocuments || []).find((item) => item.id === documentMatch[1] && item.userId === user.id)
+      if (!record) return json(res, 404, { error: 'Document not found.' })
+      const file = await readFile(resolve(PRIVATE_FILES_DIR, record.id))
+      const asciiName = record.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100) || 'document'
+      res.writeHead(200, {
+        'content-type': record.type, 'content-length': file.length,
+        'content-disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(record.name)}`,
+        'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff',
+      })
+      return res.end(file)
+    }
+    if (req.method === 'GET' && route === '/api/requests') {
+      if (!user) return json(res, 401, { error: 'Log in to view your saved requests.' })
+      return json(res, 200, {
+        requests: store.requests.filter((item) => item.userId === user.id),
+        providerInterests: store.providerInterests.filter((item) => item.userId === user.id),
+      })
+    }
+    if (req.method === 'POST' && route === '/api/requests') {
+      if (!user) return json(res, 401, { error: 'Create an account or log in before saving a request.' })
+      const input = await body(req)
+      const item = {
+        id: 'SC-' + randomBytes(5).toString('hex').toUpperCase(), userId: user.id,
+        service: clean(input.service, 100), name: user.name, phone: clean(input.phone, 40),
+        area: clean(input.area, 120), country: clean(input.country, 100), details: clean(input.details, 1200),
+        createdAt: new Date().toISOString(),
+      }
+      if (!item.service || !item.phone || !item.area || !item.country || !item.details) return json(res, 400, { error: 'Complete all request fields.' })
+      store.requests.unshift(item); await saveStore(store)
+      const { userId: _userId, ...safe } = item
+      return json(res, 201, { request: safe })
+    }
+    if (req.method === 'POST' && route === '/api/provider-interest') {
+      if (!user) return json(res, 401, { error: 'Create an account or log in before saving provider interest.' })
+      const input = await body(req)
+      const item = {
+        id: 'PI-' + randomBytes(5).toString('hex').toUpperCase(), userId: user.id, name: user.name,
+        trade: clean(input.trade, 100), area: clean(input.area, 120), country: clean(input.country, 100),
+        createdAt: new Date().toISOString(),
+      }
+      if (!item.trade || !item.area || !item.country) return json(res, 400, { error: 'Complete all provider details.' })
+      store.providerInterests.unshift(item); await saveStore(store)
+      const { userId: _userId, ...safe } = item
+      return json(res, 201, { interest: safe })
+    }
+    if (req.method === 'POST' && route === '/api/chat') {
+      const input = await body(req)
+      const message = clean(input.message, 500)
+      if (!message) return json(res, 400, { error: 'Write a message first.' })
+      return json(res, 200, { reply: 'Thanks for your message. This demo messenger is automated; no live agent or service provider is connected yet.' })
+    }
+    return json(res, 404, { error: 'Not found.' })
+  } catch (error) {
+    console.error('Request failed:', error.message)
+    return json(res, error.status || 500, { error: error.status ? error.message : 'Something went wrong. Please try again.' })
+  }
+})
+server.listen(PORT, HOST, () => console.log(`ServiceConnect demo listening on ${HOST}:${PORT}`))
+))
     if (documentMatch && req.method === 'GET') {
       if (!user) return json(res, 401, { error: 'Log in to download private documents.' })
       const record = (store.profileDocuments || []).find((item) => item.id === documentMatch[1] && item.userId === user.id)
