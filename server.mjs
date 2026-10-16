@@ -216,10 +216,13 @@ const server = createServer(async (req, res) => {
       const { userId: _userId, ...document } = store.profileDocuments[0]
       return json(res, 201, { document })
     }
-    const documentMatch = route.match(new RegExp('^/api/profile/documents/([a-f0-9]{36})
-    if (documentMatch && req.method === 'GET') {
+    const documentPrefix = '/api/profile/documents/'
+    const documentId = route.startsWith(documentPrefix) ? route.slice(documentPrefix.length) : ''
+    const validDocumentId = /^[a-f0-9]{36}$/.test(documentId)
+
+    if (validDocumentId && req.method === 'GET') {
       if (!user) return json(res, 401, { error: 'Log in to download private documents.' })
-      const record = (store.profileDocuments || []).find((item) => item.id === documentMatch[1] && item.userId === user.id)
+      const record = (store.profileDocuments || []).find((item) => item.id === documentId && item.userId === user.id)
       if (!record) return json(res, 404, { error: 'Document not found.' })
       const file = await readFile(resolve(PRIVATE_FILES_DIR, record.id))
       const asciiName = record.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100) || 'document'
