@@ -1,14 +1,15 @@
 import { createServer } from 'node:http'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 
 const PORT = Number(process.env.PORT || 10000)
 const HOST = '0.0.0.0'
 const DIST = resolve('dist')
 const DATA_FILE = process.env.DATA_FILE || '/tmp/serviceconnect-demo.json'
+const PRIVATE_FILES_DIR = process.env.PRIVATE_FILES_DIR || '/tmp/serviceconnect-private-files'
 const SESSION_COOKIE = 'sc_demo_session'
-const MAX_BODY = 32 * 1024
+const MAX_BODY = 8 * 1024 * 1024
 const sessions = new Map()
 const rate = new Map()
 let writes = Promise.resolve()
@@ -59,6 +60,25 @@ function limited(req) {
 }
 function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : '' }
 function publicUser(user) { return { id: user.id, name: user.name, email: user.email } }
+function uploadBuffer(input, allowed, maxBytes) {
+  const data = typeof input?.data === 'string' ? input.data : ''
+  const type = clean(input?.type, 80).toLowerCase()
+  if (!allowed.includes(type) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data))
+    throw Object.assign(new Error('Choose a supported image or PDF file.'), { status: 400 })
+  const bytes = Buffer.from(data, 'base64')
+  if (!bytes.length || bytes.length > maxBytes) throw Object.assign(new Error(`File must be smaller than ${Math.floor(maxBytes / 1024 / 1024)} MB.`), { status: 413 })
+  const valid = type === 'image/png' ? bytes.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+    : type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+    : type === 'image/webp' ? bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP'
+    : type === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-'
+    : false
+  if (!valid) throw Object.assign(new Error('The file contents do not match the selected file type.'), { status: 400 })
+  return { bytes, type }
+}
+async function storePrivateFile(id, bytes) {
+  await mkdir(PRIVATE_FILES_DIR, { recursive: true, mode: 0o700 })
+  await writeFile(resolve(PRIVATE_FILES_DIR, id), bytes, { flag: 'wx', mode: 0o600 })
+}
 function hashPassword(password, salt = randomBytes(16).toString('hex')) {
   return { salt, hash: scryptSync(password, salt, 64).toString('hex') }
 }
@@ -111,7 +131,7 @@ const server = createServer(async (req, res) => {
         return json(res, 400, { error: 'Enter a name, valid email, and password with at least 8 characters.' })
       if (store.users.some((item) => item.email === email)) return json(res, 409, { error: 'An account with that email already exists. Try logging in.' })
       const credentials = hashPassword(password)
-      const account = { id: randomBytes(16).toString('hex'), name, email, ...credentials, createdAt: new Date().toISOString() }
+      const account = { id: randomBytes(16).toString('hex'), name, email, ...credentials, profile: { phone: '', area: '', bio: '', avatarId: null }, createdAt: new Date().toISOString() }
       store.users.push(account)
       await saveStore(store)
       issueSession(res, account)
@@ -133,6 +153,80 @@ const server = createServer(async (req, res) => {
       if (token) sessions.delete(token)
       cookie(res, '', 0)
       return json(res, 200, { ok: true })
+    }
+    if (route === '/api/profile') {
+      if (!user) return json(res, 401, { error: 'Log in to view or edit your profile.' })
+      user.profile ||= { phone: '', area: '', bio: '', avatarId: null }
+      if (req.method === 'GET') {
+        const { phone = '', area = '', bio = '', avatarId = null } = user.profile
+        const documents = (store.profileDocuments || []).filter((item) => item.userId === user.id)
+          .map(({ id, name, type, size, createdAt }) => ({ id, name, type, size, createdAt }))
+        return json(res, 200, { profile: { name: user.name, email: user.email, phone, area, bio, hasAvatar: Boolean(avatarId) }, documents })
+      }
+      if (req.method === 'PUT') {
+        const input = await body(req)
+        const name = clean(input.name, 100)
+        const phone = clean(input.phone, 40)
+        const area = clean(input.area, 120)
+        const bio = clean(input.bio, 500)
+        if (name.length < 2) return json(res, 400, { error: 'Enter a name with at least 2 characters.' })
+        user.name = name
+        user.profile = { ...(user.profile || {}), phone, area, bio }
+        await saveStore(store)
+        return json(res, 200, { profile: { name, email: user.email, phone, area, bio, hasAvatar: Boolean(user.profile.avatarId) } })
+      }
+    }
+    if (route === '/api/profile/avatar') {
+      if (!user) return json(res, 401, { error: 'Log in to view or change your profile photo.' })
+      user.profile ||= { phone: '', area: '', bio: '', avatarId: null }
+      if (req.method === 'GET') {
+        if (!user.profile.avatarId) return json(res, 404, { error: 'No profile photo has been uploaded.' })
+        const file = await readFile(resolve(PRIVATE_FILES_DIR, user.profile.avatarId))
+        const record = (store.profileFiles || []).find((item) => item.id === user.profile.avatarId && item.userId === user.id)
+        if (!record) return json(res, 404, { error: 'Profile photo not found.' })
+        res.writeHead(200, { 'content-type': record.type, 'content-length': file.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' })
+        return res.end(file)
+      }
+      if (req.method === 'POST') {
+        const input = await body(req)
+        const { bytes, type } = uploadBuffer(input, ['image/jpeg', 'image/png', 'image/webp'], 3 * 1024 * 1024)
+        const id = randomBytes(18).toString('hex')
+        await storePrivateFile(id, bytes)
+        store.profileFiles ||= []
+        store.profileFiles.push({ id, userId: user.id, type, size: bytes.length, createdAt: new Date().toISOString() })
+        user.profile.avatarId = id
+        await saveStore(store)
+        return json(res, 201, { hasAvatar: true })
+      }
+    }
+    if (route === '/api/profile/documents' && req.method === 'POST') {
+      if (!user) return json(res, 401, { error: 'Log in to upload a private document.' })
+      const input = await body(req)
+      const { bytes, type } = uploadBuffer(input, ['application/pdf', 'image/jpeg', 'image/png'], 5 * 1024 * 1024)
+      const id = randomBytes(18).toString('hex')
+      await storePrivateFile(id, bytes)
+      store.profileDocuments ||= []
+      store.profileDocuments.unshift({
+        id, userId: user.id, name: clean(input.name, 120).replace(/[\\/\\x00-\\x1f]/g, '') || 'Document',
+        type, size: bytes.length, createdAt: new Date().toISOString(),
+      })
+      await saveStore(store)
+      const { userId: _userId, ...document } = store.profileDocuments[0]
+      return json(res, 201, { document })
+    }
+    const documentMatch = route.match(/^\\/api\\/profile\\/documents\\/([a-f0-9]{36})$/)
+    if (documentMatch && req.method === 'GET') {
+      if (!user) return json(res, 401, { error: 'Log in to download private documents.' })
+      const record = (store.profileDocuments || []).find((item) => item.id === documentMatch[1] && item.userId === user.id)
+      if (!record) return json(res, 404, { error: 'Document not found.' })
+      const file = await readFile(resolve(PRIVATE_FILES_DIR, record.id))
+      const asciiName = record.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100) || 'document'
+      res.writeHead(200, {
+        'content-type': record.type, 'content-length': file.length,
+        'content-disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(record.name)}`,
+        'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff',
+      })
+      return res.end(file)
     }
     if (req.method === 'GET' && route === '/api/requests') {
       if (!user) return json(res, 401, { error: 'Log in to view your saved requests.' })
