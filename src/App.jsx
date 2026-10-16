@@ -67,6 +67,15 @@ async function api(path, options = {}) {
   return data
 }
 
+function filePayload(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Could not read that file.'))
+    reader.onload = () => resolve({ name: file.name, type: file.type, data: String(reader.result).split(',')[1] || '' })
+    reader.readAsDataURL(file)
+  })
+}
+
 function Logo({ footer = false }) {
   return <a className={`brand${footer ? ' brand-footer' : ''}`} href="#home" aria-label="ServiceConnect home">
     <span className="brand-mark"><Wrench size={21} strokeWidth={2.6} /></span>
@@ -112,6 +121,10 @@ function App() {
   const [dialogStatus, setDialogStatus] = useState('')
   const [sessionRequests, setSessionRequests] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
+  const [profileData, setProfileData] = useState(null)
+  const [profileNotice, setProfileNotice] = useState('')
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [documentFile, setDocumentFile] = useState(null)
   const [sessionProviderInterest, setSessionProviderInterest] = useState([])
   const [chatMessages, setChatMessages] = useState([{ id: 'welcome', sender: 'assistant', text: 'Hi! I’m the ServiceConnect messenger demo. Messages receive automated replies; a live agent is not connected.' }])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -155,6 +168,17 @@ function App() {
   const openDialog = (type, service = '') => {
     setDialogStatus('')
     setDialog({ type, service })
+    setMenuOpen(false)
+  }
+
+  const openProfile = async () => {
+    if (!currentUser) { openDialog('auth-login'); return }
+    setProfileNotice('')
+    setAvatarFile(null)
+    setDocumentFile(null)
+    await loadProfile()
+    setDialogStatus('')
+    setDialog({ type: 'profile' })
     setMenuOpen(false)
   }
 
@@ -216,6 +240,52 @@ function App() {
       setSessionRequests(data.requests || [])
       setSessionProviderInterest(data.providerInterests || [])
     } catch { setSessionRequests([]); setSessionProviderInterest([]) }
+  }
+
+  const loadProfile = async () => {
+    try {
+      const data = await api('/api/profile')
+      setProfileData(data.profile)
+      setProfileDocuments(data.documents || [])
+    } catch (error) { setProfileNotice(error.message) }
+  }
+
+  const [profileDocuments, setProfileDocuments] = useState([])
+
+  const saveProfile = async (event) => {
+    event.preventDefault()
+    const values = new FormData(event.currentTarget)
+    try {
+      const data = await api('/api/profile', { method: 'PUT', body: {
+        name: values.get('name'), phone: values.get('phone'), area: values.get('area'), bio: values.get('bio'),
+      } })
+      setProfileData((current) => ({ ...current, ...data.profile }))
+      setCurrentUser((current) => current ? { ...current, name: data.profile.name } : current)
+      setProfileNotice('Profile details saved.')
+    } catch (error) { setProfileNotice(error.message) }
+  }
+
+  const uploadAvatar = async () => {
+    if (!avatarFile) { setProfileNotice('Choose a picture first.'); return }
+    try {
+      await api('/api/profile/avatar', { method: 'POST', body: await filePayload(avatarFile) })
+      setProfileData((current) => ({ ...current, hasAvatar: true }))
+      setAvatarFile(null)
+      setProfileNotice('Profile picture uploaded.')
+    } catch (error) { setProfileNotice(error.message) }
+  }
+
+  const uploadProfileDocument = async (event) => {
+    event.preventDefault()
+    if (!documentFile) { setProfileNotice('Choose a document first.'); return }
+    try {
+      const payload = await filePayload(documentFile)
+      const { document } = await api('/api/profile/documents', { method: 'POST', body: payload })
+      setProfileDocuments((current) => [document, ...current])
+      setDocumentFile(null)
+      event.currentTarget.reset()
+      setProfileNotice('Private document uploaded.')
+    } catch (error) { setProfileNotice(error.message) }
   }
 
   const submitAuth = async (event) => {
@@ -285,11 +355,11 @@ function App() {
       <nav className="nav wrap" aria-label="Main navigation">
         <Logo />
         <div className="nav-links">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}</div>
-        <div className="nav-actions">{currentUser ? <><span className="signed-in-label">Hi, {currentUser.name}</span><button className="button button-outline button-small" onClick={logOut}>Log out</button></> : <><button className="button button-outline button-small" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary button-small" onClick={() => openDialog('auth-signup')}>Sign up</button></>}<button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button><div className="notification-wrap"><button className="notification-button" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}</div></div>
+        <div className="nav-actions">{currentUser ? <><span className="signed-in-label">Hi, {currentUser.name}</span><button className="button button-outline button-small" onClick={logOut}>Log out</button></> : <><button className="button button-outline button-small" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary button-small" onClick={() => openDialog('auth-signup')}>Sign up</button></>}{currentUser && <button className="button button-outline button-small" onClick={openProfile}>My profile</button>}<button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button><div className="notification-wrap"><button className="notification-button" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}</div></div>
         <button className="mobile-notification-button" type="button" aria-label="Notifications" onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel mobile-notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}
         <button className="menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       </nav>
-      {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}{currentUser ? <button className="button button-outline" onClick={logOut}>Log out</button> : <><button className="button button-outline" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary" onClick={() => openDialog('auth-signup')}>Sign up</button></>}<button className="button button-outline" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary" onClick={() => openDialog('app')}>Get the app <ArrowRight size={16} /></button><button className="button button-outline" onClick={() => { setMenuOpen(false); setNotificationsOpen(true); setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={16} /> Notifications</button></div>}
+      {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}{currentUser ? <><button className="button button-outline" onClick={openProfile}>My profile</button><button className="button button-outline" onClick={logOut}>Log out</button></> : <><button className="button button-outline" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary" onClick={() => openDialog('auth-signup')}>Sign up</button></>}<button className="button button-outline" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary" onClick={() => openDialog('app')}>Get the app <ArrowRight size={16} /></button><button className="button button-outline" onClick={() => { setMenuOpen(false); setNotificationsOpen(true); setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={16} /> Notifications</button></div>}
     </header>
 
     <main>
@@ -339,6 +409,14 @@ function App() {
         {dialog.type === 'auth-signup' && <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength="8" onInput={(event) => event.currentTarget.setCustomValidity('')} required /></label>}
         <button className="button button-primary" type="submit">{dialog.type === 'auth-login' ? 'Log in' : 'Sign up'} <ArrowRight size={16} /></button>
       </form><p className="auth-switch">{dialog.type === 'auth-login' ? 'New to ServiceConnect?' : 'Already have an account?'} <button type="button" onClick={() => openDialog(dialog.type === 'auth-login' ? 'auth-signup' : 'auth-login')}>{dialog.type === 'auth-login' ? 'Sign up' : 'Log in'}</button></p></>}</>}
+      {dialog.type === 'profile' && <><span className="dialog-eyebrow">YOUR ACCOUNT</span><h2 id="dialog-title">My profile</h2>{!profileData ? <p className="dialog-copy">Loading your private profile…</p> : <div className="profile-content">
+        <div className="profile-photo-row">{profileData.hasAvatar ? <img className="profile-avatar" src={`/api/profile/avatar?v=${Date.now()}`} alt="Your profile" /> : <span className="profile-avatar profile-avatar-empty"><UserRound size={28} /></span>}<div><strong>{profileData.name}</strong><small>{profileData.email}</small></div></div>
+        <label className="profile-file-label">Profile picture<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} /></label><p className="profile-hint">JPG, PNG, or WebP · up to 3 MB</p><button className="button button-outline" type="button" onClick={uploadAvatar} disabled={!avatarFile}>Upload picture</button>
+        <form className="dialog-form" onSubmit={saveProfile}><label>Your name<input name="name" defaultValue={profileData.name} minLength="2" required /></label><label>Email address<input value={profileData.email} readOnly /></label><label>Phone number<input name="phone" type="tel" autoComplete="tel" defaultValue={profileData.phone} /></label><label>City or area<input name="area" defaultValue={profileData.area} /></label><label>About you<textarea name="bio" rows="3" maxLength="500" defaultValue={profileData.bio} placeholder="Add a short profile description" /></label><button className="button button-primary" type="submit">Save profile <ArrowRight size={16} /></button></form>
+        <form className="dialog-form profile-document-form" onSubmit={uploadProfileDocument}><label>Add a private document<input type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} /></label><p className="profile-hint">PDF, JPG, or PNG · up to 5 MB per file</p><button className="button button-outline" type="submit" disabled={!documentFile}>Upload document</button></form>
+        <div className="profile-documents"><strong>Your documents</strong>{profileDocuments.length ? profileDocuments.map((file) => <a key={file.id} href={`/api/profile/documents/${file.id}`}><span>{file.name}</span><small>{(file.size / 1024 / 1024).toFixed(2)} MB · Private download</small></a>) : <p className="profile-hint">You have not uploaded any documents.</p>}</div>
+        <p className="profile-privacy" role="status">{profileNotice || 'Only your signed-in account can access these files. Temporary demo storage can be cleared on restart or redeploy. Upload sample files only; do not use IDs, financial records, or sensitive originals.'}</p>
+      </div>}</>}
       {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}, {request.country}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}, {interest.country}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">{currentUser ? 'No requests are saved to this demo account yet. Choose a service or provider option to start one.' : 'Log in or create an account to view saved requests.'}</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
       {dialog.type === 'chat' && <><span className="dialog-eyebrow">SERVICECONNECT MESSENGER</span><h2 id="dialog-title">How can we help?</h2><p className="dialog-copy"><span className="messenger-status-dot" /> Messenger preview · replies are automated and stay in this browser session; a live agent is not connected yet.</p><div className="chat-transcript" aria-live="polite">{chatMessages.map(({ id, sender, text }) => <div className={`chat-message ${sender === 'user' ? 'chat-message-user' : ''}`} key={id}><small>{sender === 'user' ? 'You' : 'ServiceConnect'}</small><p>{text}</p></div>)}</div><form className="chat-form" onSubmit={submitChatMessage}><label className="sr-only" htmlFor="chat-message-input">Your message</label><input id="chat-message-input" name="message" autoComplete="off" placeholder="Write a message…" maxLength="500" required /><button className="button button-primary" type="submit" aria-label="Send message"><Send size={17} /></button></form></>}
       {dialog.type === 'app' && <><span className="dialog-eyebrow">APP STATUS</span><h2 id="dialog-title">Mobile app coming soon</h2><p className="dialog-copy">The App Store and Google Play apps are not published yet. You can browse services and preview the request form on this website.</p><button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
