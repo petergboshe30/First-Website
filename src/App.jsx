@@ -119,7 +119,11 @@ function App() {
 
   useEffect(() => {
     let active = true
-    api('/api/auth/me').then(({ user }) => { if (active) setCurrentUser(user) }).catch(() => {})
+    api('/api/auth/me').then(({ user }) => {
+      if (!active) return
+      setCurrentUser(user)
+      if (user) loadAccountData()
+    }).catch(() => {})
     return () => { active = false }
   }, [])
 
@@ -188,10 +192,6 @@ function App() {
   const mapQuery = deviceLocation
     ? `${deviceLocation.lat},${deviceLocation.lng}`
     : `${city ? `${city}, ` : ''}${selectedCountry.name}`
-
-  const createNotification = (title, message) => {
-    setNotifications((current) => [{ id: `notice-${Date.now()}`, title, message, time: 'Just now', read: false }, ...current].slice(0, 8))
-  }
 
   const createNotification = (title, message) => {
     setNotifications((current) => [{ id: `notice-${Date.now()}`, title, message, time: 'Just now', read: false }, ...current].slice(0, 8))
@@ -289,7 +289,7 @@ function App() {
         <button className="mobile-notification-button" type="button" aria-label="Notifications" onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel mobile-notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}
         <button className="menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       </nav>
-      {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}<button className="button button-outline" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary" onClick={() => openDialog('auth-signup')}>Sign up</button><button className="button button-outline" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary" onClick={() => openDialog('app')}>Get the app <ArrowRight size={16} /></button><button className="button button-outline" onClick={() => { setMenuOpen(false); setNotificationsOpen(true); setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={16} /> Notifications</button></div>}
+      {menuOpen && <div className="mobile-menu">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}{currentUser ? <button className="button button-outline" onClick={logOut}>Log out</button> : <><button className="button button-outline" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary" onClick={() => openDialog('auth-signup')}>Sign up</button></>}<button className="button button-outline" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary" onClick={() => openDialog('app')}>Get the app <ArrowRight size={16} /></button><button className="button button-outline" onClick={() => { setMenuOpen(false); setNotificationsOpen(true); setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={16} /> Notifications</button></div>}
     </header>
 
     <main>
