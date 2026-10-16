@@ -35,7 +35,7 @@ function cookie(res, value, maxAge = 60 * 60 * 24 * 7) {
 }
 function sessionUser(req) {
   const raw = req.headers.cookie || ''
-  const match = raw.match(new RegExp('(?:^|;\\s*)' + SESSION_COOKIE + '=([^;]+)'))
+  const match = raw.match(new RegExp('(?:^|;\s*)' + SESSION_COOKIE + '=([^;]+)'))
   if (!match) return null
   const record = sessions.get(match[1])
   if (!record || record.expires < Date.now()) { sessions.delete(match[1]); return null }
@@ -107,7 +107,7 @@ const server = createServer(async (req, res) => {
       const name = clean(input.name, 100)
       const email = clean(input.email, 254).toLowerCase()
       const password = typeof input.password === 'string' ? input.password : ''
-      if (name.length < 2 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 8 || password.length > 200)
+      if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || password.length > 200)
         return json(res, 400, { error: 'Enter a name, valid email, and password with at least 8 characters.' })
       if (store.users.some((item) => item.email === email)) return json(res, 409, { error: 'An account with that email already exists. Try logging in.' })
       const credentials = hashPassword(password)
@@ -129,7 +129,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { user: publicUser(account), demo: true })
     }
     if (req.method === 'POST' && route === '/api/auth/logout') {
-      const token = (req.headers.cookie || '').match(new RegExp('(?:^|;\\s*)' + SESSION_COOKIE + '=([^;]+)'))?.[1]
+      const token = (req.headers.cookie || '').match(new RegExp('(?:^|;\s*)' + SESSION_COOKIE + '=([^;]+)'))?.[1]
       if (token) sessions.delete(token)
       cookie(res, '', 0)
       return json(res, 200, { ok: true })
