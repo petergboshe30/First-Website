@@ -125,6 +125,8 @@ function App() {
   const [profileNotice, setProfileNotice] = useState('')
   const [avatarFile, setAvatarFile] = useState(null)
   const [documentFile, setDocumentFile] = useState(null)
+  const [avatarVersion, setAvatarVersion] = useState(0)
+  const [profileDocuments, setProfileDocuments] = useState([])
   const [sessionProviderInterest, setSessionProviderInterest] = useState([])
   const [chatMessages, setChatMessages] = useState([{ id: 'welcome', sender: 'assistant', text: 'Hi! I’m the ServiceConnect messenger demo. Messages receive automated replies; a live agent is not connected.' }])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -250,8 +252,6 @@ function App() {
     } catch (error) { setProfileNotice(error.message) }
   }
 
-  const [profileDocuments, setProfileDocuments] = useState([])
-
   const saveProfile = async (event) => {
     event.preventDefault()
     const values = new FormData(event.currentTarget)
@@ -270,6 +270,7 @@ function App() {
     try {
       await api('/api/profile/avatar', { method: 'POST', body: await filePayload(avatarFile) })
       setProfileData((current) => ({ ...current, hasAvatar: true }))
+      setAvatarVersion((version) => version + 1)
       setAvatarFile(null)
       setProfileNotice('Profile picture uploaded.')
     } catch (error) { setProfileNotice(error.message) }
@@ -410,7 +411,7 @@ function App() {
         <button className="button button-primary" type="submit">{dialog.type === 'auth-login' ? 'Log in' : 'Sign up'} <ArrowRight size={16} /></button>
       </form><p className="auth-switch">{dialog.type === 'auth-login' ? 'New to ServiceConnect?' : 'Already have an account?'} <button type="button" onClick={() => openDialog(dialog.type === 'auth-login' ? 'auth-signup' : 'auth-login')}>{dialog.type === 'auth-login' ? 'Sign up' : 'Log in'}</button></p></>}</>}
       {dialog.type === 'profile' && <><span className="dialog-eyebrow">YOUR ACCOUNT</span><h2 id="dialog-title">My profile</h2>{!profileData ? <p className="dialog-copy">Loading your private profile…</p> : <div className="profile-content">
-        <div className="profile-photo-row">{profileData.hasAvatar ? <img className="profile-avatar" src={`/api/profile/avatar?v=${Date.now()}`} alt="Your profile" /> : <span className="profile-avatar profile-avatar-empty"><UserRound size={28} /></span>}<div><strong>{profileData.name}</strong><small>{profileData.email}</small></div></div>
+        <div className="profile-photo-row">{profileData.hasAvatar ? <img className="profile-avatar" src={`/api/profile/avatar?v=${avatarVersion}`} alt="Your profile" /> : <span className="profile-avatar profile-avatar-empty"><UserRound size={28} /></span>}<div><strong>{profileData.name}</strong><small>{profileData.email}</small></div></div>
         <label className="profile-file-label">Profile picture<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} /></label><p className="profile-hint">JPG, PNG, or WebP · up to 3 MB</p><button className="button button-outline" type="button" onClick={uploadAvatar} disabled={!avatarFile}>Upload picture</button>
         <form className="dialog-form" onSubmit={saveProfile}><label>Your name<input name="name" defaultValue={profileData.name} minLength="2" required /></label><label>Email address<input value={profileData.email} readOnly /></label><label>Phone number<input name="phone" type="tel" autoComplete="tel" defaultValue={profileData.phone} /></label><label>City or area<input name="area" defaultValue={profileData.area} /></label><label>About you<textarea name="bio" rows="3" maxLength="500" defaultValue={profileData.bio} placeholder="Add a short profile description" /></label><button className="button button-primary" type="submit">Save profile <ArrowRight size={16} /></button></form>
         <form className="dialog-form profile-document-form" onSubmit={uploadProfileDocument}><label>Add a private document<input type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} /></label><p className="profile-hint">PDF, JPG, or PNG · up to 5 MB per file</p><button className="button button-outline" type="submit" disabled={!documentFile}>Upload document</button></form>
