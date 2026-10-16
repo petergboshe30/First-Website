@@ -55,6 +55,18 @@ const nav = [
   ['For providers', 'providers'],
 ]
 
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: 'same-origin',
+    ...options,
+    headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) },
+    body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'The request could not be completed.')
+  return data
+}
+
 function Logo({ footer = false }) {
   return <a className={`brand${footer ? ' brand-footer' : ''}`} href="#home" aria-label="ServiceConnect home">
     <span className="brand-mark"><Wrench size={21} strokeWidth={2.6} /></span>
@@ -99,10 +111,17 @@ function App() {
   const [dialog, setDialog] = useState(null)
   const [dialogStatus, setDialogStatus] = useState('')
   const [sessionRequests, setSessionRequests] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
   const [sessionProviderInterest, setSessionProviderInterest] = useState([])
-  const [chatMessages, setChatMessages] = useState([{ id: 'welcome', sender: 'assistant', text: 'Hi! I’m the ServiceConnect messenger preview. Ask how to find a service or set your location.' }])
+  const [chatMessages, setChatMessages] = useState([{ id: 'welcome', sender: 'assistant', text: 'Hi! I’m the ServiceConnect messenger demo. Messages receive automated replies; a live agent is not connected.' }])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState([{ id: 'welcome', title: 'Welcome to ServiceConnect', message: 'Your on-site updates will appear here.', time: 'Just now', read: false }])
+
+  useEffect(() => {
+    let active = true
+    api('/api/auth/me').then(({ user }) => { if (active) setCurrentUser(user) }).catch(() => {})
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (!dialog) return undefined
@@ -174,50 +193,99 @@ function App() {
     setNotifications((current) => [{ id: `notice-${Date.now()}`, title, message, time: 'Just now', read: false }, ...current].slice(0, 8))
   }
 
-  const submitChatMessage = (event) => {
+  const createNotification = (title, message) => {
+    setNotifications((current) => [{ id: `notice-${Date.now()}`, title, message, time: 'Just now', read: false }, ...current].slice(0, 8))
+  }
+
+  const submitChatMessage = async (event) => {
     event.preventDefault()
     const form = event.currentTarget
     const message = new FormData(form).get('message')?.toString().trim()
     if (!message) return
-    const reply = 'Thanks for reaching out. This preview cannot connect you to a live agent or provider yet. Choose your country and city above to prepare a local service request.'
-    setChatMessages((current) => [...current, { id: `you-${Date.now()}`, sender: 'user', text: message }, { id: `reply-${Date.now()}`, sender: 'assistant', text: reply }])
-    createNotification('Messenger reply', 'ServiceConnect sent a demo reply in your conversation.')
-    form.reset()
+    try {
+      const { reply } = await api('/api/chat', { method: 'POST', body: { message } })
+      setChatMessages((current) => [...current, { id: `you-${Date.now()}`, sender: 'user', text: message }, { id: `reply-${Date.now()}`, sender: 'assistant', text: reply }])
+      createNotification('Messenger reply', 'Your message received an automated demo reply.')
+      form.reset()
+    } catch (error) { setDialogStatus(error.message) }
   }
 
-  const submitBooking = (event) => {
+  const loadAccountData = async () => {
+    try {
+      const data = await api('/api/requests')
+      setSessionRequests(data.requests || [])
+      setSessionProviderInterest(data.providerInterests || [])
+    } catch { setSessionRequests([]); setSessionProviderInterest([]) }
+  }
+
+  const submitAuth = async (event) => {
     event.preventDefault()
-    const values = new FormData(event.currentTarget)
-    const request = {
-      id: `SC-${Date.now().toString(36).toUpperCase()}`,
-      service: dialog?.service,
-      name: values.get('name'),
-      phone: values.get('phone'),
-      area: values.get('area'),
-      country: values.get('country'),
-      details: values.get('details'),
+    const form = event.currentTarget
+    const values = new FormData(form)
+    const signup = dialog.type === 'auth-signup'
+    if (signup && values.get('password') !== values.get('confirmPassword')) {
+      form.elements.confirmPassword.setCustomValidity('Passwords do not match.')
+      form.reportValidity()
+      return
     }
-    setSessionRequests((current) => [request, ...current])
-    createNotification('Service request saved', `${request.service} request ${request.id} is saved in this browser tab.`)
-    setDialogStatus(`Request ${request.id} is saved in this browser tab. No professional has been contacted.`)
-    event.currentTarget.reset()
+    try {
+      const data = await api(signup ? '/api/auth/signup' : '/api/auth/login', {
+        method: 'POST',
+        body: { name: values.get('name'), email: values.get('email'), password: values.get('password') },
+      })
+      setCurrentUser(data.user)
+      await loadAccountData()
+      setDialogStatus(signup ? 'Your demo account is ready and you are signed in.' : 'You are now signed in.')
+      createNotification(signup ? 'Account created' : 'Welcome back', data.user.email)
+    } catch (error) { setDialogStatus(error.message) }
   }
 
-  const submitProviderInterest = (event) => {
-    event.preventDefault()
-    const values = new FormData(event.currentTarget)
-    const interest = { name: values.get('name'), trade: values.get('trade'), area: values.get('area'), country: values.get('country') }
-    setSessionProviderInterest((current) => [interest, ...current])
-    setDialogStatus('Your provider interest is saved for this browser session only. It has not been sent to ServiceConnect.')
-    event.currentTarget.reset()
+  const logOut = async () => {
+    try { await api('/api/auth/logout', { method: 'POST' }) } catch {}
+    setCurrentUser(null)
+    setSessionRequests([])
+    setSessionProviderInterest([])
+    setDialogStatus('You are signed out.')
+    createNotification('Signed out', 'Your demo session has ended.')
   }
+
+  const submitBooking = async (event) => {
+    event.preventDefault()
+    if (!currentUser) { setDialogStatus('Log in or create an account before saving a request. Your details have not been sent.'); return }
+    const values = new FormData(event.currentTarget)
+    try {
+      const { request } = await api('/api/requests', { method: 'POST', body: {
+        service: dialog?.service, phone: values.get('phone'), area: values.get('area'),
+        country: values.get('country'), details: values.get('details'),
+      } })
+      await loadAccountData()
+      createNotification('Service request saved', `${request.service} request ${request.id} was saved to your demo account.`)
+      setDialogStatus(`Request ${request.id} is saved to your demo account. No professional has been contacted.`)
+      event.currentTarget.reset()
+    } catch (error) { setDialogStatus(error.message) }
+  }
+
+  const submitProviderInterest = async (event) => {
+    event.preventDefault()
+    if (!currentUser) { setDialogStatus('Log in or create an account before saving provider interest. Your details have not been sent.'); return }
+    const values = new FormData(event.currentTarget)
+    try {
+      await api('/api/provider-interest', { method: 'POST', body: {
+        trade: values.get('trade'), area: values.get('area'), country: values.get('country'),
+      } })
+      await loadAccountData()
+      setDialogStatus('Your provider interest is saved to your demo account. The provider network is not yet active.')
+      event.currentTarget.reset()
+    } catch (error) { setDialogStatus(error.message) }
+  }
+
 
   return <div className="site-shell" id="home">
     <header className="site-header">
       <nav className="nav wrap" aria-label="Main navigation">
         <Logo />
         <div className="nav-links">{nav.map(([label, id]) => <button key={id} onClick={() => goTo(id)}>{label}</button>)}</div>
-        <div className="nav-actions"><button className="button button-outline button-small" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary button-small" onClick={() => openDialog('auth-signup')}>Sign up</button><button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button><div className="notification-wrap"><button className="notification-button" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}</div></div>
+        <div className="nav-actions">{currentUser ? <><span className="signed-in-label">Hi, {currentUser.name}</span><button className="button button-outline button-small" onClick={logOut}>Log out</button></> : <><button className="button button-outline button-small" onClick={() => openDialog('auth-login')}>Log in</button><button className="button button-primary button-small" onClick={() => openDialog('auth-signup')}>Sign up</button></>}<button className="button button-outline button-small" onClick={() => openDialog('requests')}>My requests</button><button className="button button-primary button-small" onClick={() => openDialog('app')}>Get the app <ArrowUpRight size={15} /></button><div className="notification-wrap"><button className="notification-button" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}</div></div>
         <button className="mobile-notification-button" type="button" aria-label="Notifications" onClick={() => { setNotificationsOpen(!notificationsOpen); if (!notificationsOpen) setNotifications((current) => current.map((item) => ({ ...item, read: true }))) }}><Bell size={19} />{notifications.some((item) => !item.read) && <span className="notification-dot" />}</button>{notificationsOpen && <div className="notification-panel mobile-notification-panel" role="region" aria-label="Notifications"><div className="notification-heading"><strong>Notifications</strong><button type="button" onClick={() => setNotifications([])}>Clear</button></div>{notifications.length ? notifications.map((item) => <article className="notification-item" key={item.id}><span className="notification-icon"><Bell size={15} /></span><div><b>{item.title}</b><p>{item.message}</p><small>{item.time} · On this device</small></div></article>) : <p className="notification-empty">You’re all caught up.</p>}<p className="notification-note">Demo updates stay in this browser session.</p></div>}
         <button className="menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       </nav>
@@ -262,16 +330,16 @@ function App() {
     <footer className="footer"><div className="wrap"><div className="footer-grid"><div className="footer-brand-col"><Logo footer /><p>Connecting you to trusted service experts. Your home, taken care of.</p><span className="footer-location"><MapPin size={15} /> {city ? `${city}, ` : ''}{selectedCountry.name}</span></div><div><b className="footer-title">Explore</b><a href="#how-it-works">How it works</a><a href="#services">Our services</a><a href="#map">Find us</a><a href="#get-app">Get the app</a></div><div><b className="footer-title">For professionals</b><button className="footer-link-button" onClick={() => openDialog('provider')}>Join as a provider</button><a href="#providers">Provider benefits</a><button className="footer-link-button" onClick={() => openDialog('support')}>Help & support</button></div><div><b className="footer-title">Follow along</b><div className="social-links"><button onClick={() => openDialog('social')} aria-label="Instagram"><Instagram size={18} /></button><button onClick={() => openDialog('social')} aria-label="Facebook"><Facebook size={18} /></button></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} ServiceConnect. All rights reserved.</span><span><button onClick={() => openDialog('privacy')}>Privacy</button><button onClick={() => openDialog('terms')}>Terms</button></span><span className="footer-tagline">Connecting You To Trusted Service Experts</span></div></div></footer>
 
     {dialog && <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null) }}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="dialog-close" type="button" onClick={() => setDialog(null)} aria-label="Close dialog"><X size={19} /></button>
-      {dialog.type === 'booking' && <><span className="dialog-eyebrow">SERVICE REQUEST</span><h2 id="dialog-title">Request {dialog.service}</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Tell us a little about the job. This demo keeps your request in the current tab and does not contact a provider.</p><form className="dialog-form" onSubmit={submitBooking}><label>Your name<input name="name" autoComplete="name" required /></label><label>Phone number<input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="Include your country code" required /></label><label>Country<select name="country" defaultValue={countryCode} required>{countries.map(({ code, name }) => <option key={code} value={name}>{name}</option>)}</select></label><label>City or neighbourhood<input name="area" defaultValue={city} placeholder="Enter your city or area" required /></label><label>What needs to be done?<textarea name="details" rows="3" placeholder="Add useful details" required /></label><button className="button button-primary" type="submit">Save request <ArrowRight size={16} /></button></form></>}</>}
-      {dialog.type === 'provider' && <><span className="dialog-eyebrow">PROVIDER INTEREST</span><h2 id="dialog-title">Join ServiceConnect</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Share your details to preview the provider onboarding flow. This demo does not send or store your information after the tab closes.</p><form className="dialog-form" onSubmit={submitProviderInterest}><label>Your name<input name="name" autoComplete="name" required /></label><label>Service you provide<select name="trade" defaultValue="" required><option value="" disabled>Select a service</option>{services.map(({name}) => <option key={name}>{name}</option>)}</select></label><label>Country<select name="country" defaultValue={countryCode} required>{countries.map(({ code, name }) => <option key={code} value={name}>{name}</option>)}</select></label><label>City or service area<input name="area" defaultValue={city} placeholder="Enter your city or area" required /></label><button className="button button-primary" type="submit">Continue <ArrowRight size={16} /></button></form></>}</>}
-      {['auth-login', 'auth-signup'].includes(dialog.type) && <><span className="dialog-eyebrow">{dialog.type === 'auth-login' ? 'WELCOME BACK' : 'GET STARTED'}</span><h2 id="dialog-title">{dialog.type === 'auth-login' ? 'Log in to ServiceConnect' : 'Create your account'}</h2>{dialogStatus ? <div className="dialog-success" role="status"><ShieldCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Got it</button></div> : <><p className="dialog-copy">{dialog.type === 'auth-login' ? 'Enter your details to preview the login form.' : 'Create your customer account to preview sign up.'} Authentication is not connected yet, so this form will not create or access an account.</p><form className="dialog-form" onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; if (dialog.type === 'auth-signup' && form.elements.password.value !== form.elements.confirmPassword.value) { form.elements.confirmPassword.setCustomValidity('Passwords do not match.'); form.reportValidity(); return } setDialogStatus('Authentication is not configured yet. No account was created and no login was performed.') }}>
-        {dialog.type === 'auth-signup' && <label>Your name<input name="name" autoComplete="name" required /></label>}
+      {dialog.type === 'booking' && <><span className="dialog-eyebrow">SERVICE REQUEST</span><h2 id="dialog-title">Request {dialog.service}</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Requests are saved to your demo account. No professional has been contacted.</p><form className="dialog-form" onSubmit={submitBooking}><label>Your name<input name="name" autoComplete="name" required /></label><label>Phone number<input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="Include your country code" required /></label><label>Country<select name="country" defaultValue={countryCode} required>{countries.map(({ code, name }) => <option key={code} value={name}>{name}</option>)}</select></label><label>City or neighbourhood<input name="area" defaultValue={city} placeholder="Enter your city or area" required /></label><label>What needs to be done?<textarea name="details" rows="3" placeholder="Add useful details" required /></label><button className="button button-primary" type="submit">Save request <ArrowRight size={16} /></button></form></>}</>}
+      {dialog.type === 'provider' && <><span className="dialog-eyebrow">PROVIDER INTEREST</span><h2 id="dialog-title">Join ServiceConnect</h2>{dialogStatus ? <div className="dialog-success" role="status"><BadgeCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Done</button></div> : <><p className="dialog-copy">Save your provider interest to your demo account. The provider network is not yet active.</p><form className="dialog-form" onSubmit={submitProviderInterest}><label>Your name<input name="name" autoComplete="name" required /></label><label>Service you provide<select name="trade" defaultValue="" required><option value="" disabled>Select a service</option>{services.map(({name}) => <option key={name}>{name}</option>)}</select></label><label>Country<select name="country" defaultValue={countryCode} required>{countries.map(({ code, name }) => <option key={code} value={name}>{name}</option>)}</select></label><label>City or service area<input name="area" defaultValue={city} placeholder="Enter your city or area" required /></label><button className="button button-primary" type="submit">Continue <ArrowRight size={16} /></button></form></>}</>}
+      {['auth-login', 'auth-signup'].includes(dialog.type) && <><span className="dialog-eyebrow">{dialog.type === 'auth-login' ? 'WELCOME BACK' : 'GET STARTED'}</span><h2 id="dialog-title">{dialog.type === 'auth-login' ? 'Log in to ServiceConnect' : 'Create your account'}</h2>{dialogStatus ? <div className="dialog-success" role="status"><ShieldCheck size={25} /><p>{dialogStatus}</p><button className="button button-primary" onClick={() => setDialog(null)}>Got it</button></div> : <><p className="dialog-copy">{dialog.type === 'auth-login' ? 'Sign in to access your saved demo requests.' : 'Create a demo account to save service requests and provider interest. Demo data may be cleared when the free service restarts or redeploys.'}</p><form className="dialog-form" onSubmit={submitAuth}>
+        {dialog.type === 'auth-signup' && <label>Your name<input name="name" autoComplete="name" minLength="2" required /></label>}
         <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>
         <label>Password<input name="password" type="password" autoComplete={dialog.type === 'auth-login' ? 'current-password' : 'new-password'} minLength="8" required /></label>
         {dialog.type === 'auth-signup' && <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength="8" onInput={(event) => event.currentTarget.setCustomValidity('')} required /></label>}
         <button className="button button-primary" type="submit">{dialog.type === 'auth-login' ? 'Log in' : 'Sign up'} <ArrowRight size={16} /></button>
       </form><p className="auth-switch">{dialog.type === 'auth-login' ? 'New to ServiceConnect?' : 'Already have an account?'} <button type="button" onClick={() => openDialog(dialog.type === 'auth-login' ? 'auth-signup' : 'auth-login')}>{dialog.type === 'auth-login' ? 'Sign up' : 'Log in'}</button></p></>}</>}
-      {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}, {request.country}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}, {interest.country}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">You have no requests in this browser tab. Choose a service card or provider option to start one.</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
+      {dialog.type === 'requests' && <><span className="dialog-eyebrow">THIS BROWSER SESSION</span><h2 id="dialog-title">My requests</h2>{sessionRequests.length || sessionProviderInterest.length ? <div className="request-list">{sessionRequests.map((request) => <article className="request-item" key={request.id}><b>{request.service} request</b><span>{request.id} · {request.area}, {request.country}</span><small>Saved in this tab · No provider contacted</small></article>)}{sessionProviderInterest.map((interest, index) => <article className="request-item" key={`${interest.name}-${index}`}><b>Provider interest · {interest.trade}</b><span>{interest.name} · {interest.area}, {interest.country}</span><small>Saved in this tab · Not sent to ServiceConnect</small></article>)}</div> : <p className="dialog-copy">{currentUser ? 'No requests are saved to this demo account yet. Choose a service or provider option to start one.' : 'Log in or create an account to view saved requests.'}</p>}<button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
       {dialog.type === 'chat' && <><span className="dialog-eyebrow">SERVICECONNECT MESSENGER</span><h2 id="dialog-title">How can we help?</h2><p className="dialog-copy"><span className="messenger-status-dot" /> Messenger preview · replies are automated and stay in this browser session; a live agent is not connected yet.</p><div className="chat-transcript" aria-live="polite">{chatMessages.map(({ id, sender, text }) => <div className={`chat-message ${sender === 'user' ? 'chat-message-user' : ''}`} key={id}><small>{sender === 'user' ? 'You' : 'ServiceConnect'}</small><p>{text}</p></div>)}</div><form className="chat-form" onSubmit={submitChatMessage}><label className="sr-only" htmlFor="chat-message-input">Your message</label><input id="chat-message-input" name="message" autoComplete="off" placeholder="Write a message…" maxLength="500" required /><button className="button button-primary" type="submit" aria-label="Send message"><Send size={17} /></button></form></>}
       {dialog.type === 'app' && <><span className="dialog-eyebrow">APP STATUS</span><h2 id="dialog-title">Mobile app coming soon</h2><p className="dialog-copy">The App Store and Google Play apps are not published yet. You can browse services and preview the request form on this website.</p><button className="button button-primary" onClick={() => { setDialog(null); goTo('services') }}>Browse services <ArrowRight size={16} /></button></>}
       {['support', 'social'].includes(dialog.type) && <><span className="dialog-eyebrow">SERVICECONNECT</span><h2 id="dialog-title">{dialog.type === 'support' ? 'Support contact coming soon' : 'Social links coming soon'}</h2><p className="dialog-copy">These contact channels have not been configured yet. No message has been sent.</p><button className="button button-primary" onClick={() => setDialog(null)}>Close</button></>}
